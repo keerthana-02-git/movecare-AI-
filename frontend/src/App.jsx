@@ -1,5 +1,16 @@
-import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import {
+  BrowserRouter,
+  Navigate,
+  NavLink,
+  Outlet,
+  Route,
+  Routes,
+  useNavigate,
+} from 'react-router-dom'
 import './App.css'
+
+const API_BASE_URL = 'http://localhost:5000/api'
 
 const navItems = [
   { label: 'Home', to: '/' },
@@ -59,7 +70,27 @@ const steps = [
   'Continuous recovery optimization',
 ]
 
-function Navbar() {
+function Navbar({ user, onLogout }) {
+  const navigate = useNavigate()
+
+  const handleLogout = async () => {
+    const token = localStorage.getItem('movecare-token')
+
+    if (token) {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+    }
+
+    localStorage.removeItem('movecare-token')
+    localStorage.removeItem('movecare-user')
+    onLogout()
+    navigate('/login')
+  }
+
   return (
     <header className="topbar">
       <div className="container nav-wrap">
@@ -83,9 +114,27 @@ function Navbar() {
           ))}
         </nav>
 
-        <a href="/contact" className="primary-btn small">
-          Book a Consult
-        </a>
+        <div className="nav-actions">
+          {user ? (
+            <>
+              <NavLink to="/dashboard" className="secondary-btn small">
+                Dashboard
+              </NavLink>
+              <button type="button" className="primary-btn small" onClick={handleLogout}>
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <NavLink to="/login" className="secondary-btn small">
+                Login
+              </NavLink>
+              <NavLink to="/register" className="primary-btn small">
+                Register
+              </NavLink>
+            </>
+          )}
+        </div>
       </div>
     </header>
   )
@@ -161,8 +210,8 @@ function HomePage() {
               Enhancing musculoskeletal health through accessible remote physical therapy and care.
             </p>
             <div className="cta-row">
-              <a href="/services" className="primary-btn">Explore Services</a>
-              <a href="/contact" className="secondary-btn">Talk to a Specialist</a>
+              <NavLink to="/services" className="primary-btn">Explore Services</NavLink>
+              <NavLink to="/register" className="secondary-btn">Talk to a Specialist</NavLink>
             </div>
             <div className="metric-row">
               {metrics.map((metric) => (
@@ -317,11 +366,218 @@ function ContactPage() {
   )
 }
 
+function AuthPage({ mode, onAuthComplete }) {
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'Patient' })
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const navigate = useNavigate()
+
+  const isRegister = mode === 'register'
+
+  const handleChange = (event) => {
+    const { name, value } = event.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+    setError('')
+
+    if (isRegister && !formData.name.trim()) {
+      setError('Name is required.')
+      return
+    }
+
+    if (!formData.email.trim() || !formData.password.trim()) {
+      setError('Email and password are required.')
+      return
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long.')
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/${isRegister ? 'register' : 'login'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Authentication failed')
+      }
+
+      localStorage.setItem('movecare-token', data.token)
+      localStorage.setItem('movecare-user', JSON.stringify(data.user))
+      onAuthComplete(data.user)
+      navigate('/dashboard')
+    } catch (submittedError) {
+      setError(submittedError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <main className="page-shell">
+      <div className="container auth-wrap">
+        <form className="auth-card" onSubmit={handleSubmit}>
+          <div className="auth-header">
+            <span className="eyebrow accent">MoveCare AI</span>
+            <h2>{isRegister ? 'Create your account' : 'Welcome back'}</h2>
+          </div>
+
+          {isRegister && (
+            <label>
+              Full name
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="Enter your name"
+              />
+            </label>
+          )}
+
+          <label>
+            Email
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="you@example.com"
+            />
+          </label>
+
+          <label>
+            Password
+            <input
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              placeholder="••••••••"
+            />
+          </label>
+
+          {isRegister && (
+            <label>
+              Role
+              <select name="role" value={formData.role} onChange={handleChange}>
+                <option value="Patient">Patient</option>
+                <option value="Therapist">Therapist</option>
+                <option value="Admin">Admin</option>
+              </select>
+            </label>
+          )}
+
+          {error && <div className="form-error">{error}</div>}
+
+          <button type="submit" className="primary-btn auth-button" disabled={loading}>
+            {loading ? 'Please wait...' : isRegister ? 'Create account' : 'Login'}
+          </button>
+
+          <p className="auth-link">
+            {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
+            <NavLink to={isRegister ? '/login' : '/register'}>
+              {isRegister ? 'Login here' : 'Register here'}
+            </NavLink>
+          </p>
+        </form>
+      </div>
+    </main>
+  )
+}
+
+function ProtectedRoute({ user, requiredRole }) {
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
+
+  if (requiredRole && user.role !== requiredRole) {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  return <Outlet />
+}
+
+function DashboardPage({ user }) {
+  const roleContent = {
+    Patient: {
+      title: 'Patient dashboard',
+      summary: 'Your rehabilitation plan, monitoring insights, and therapy progress are ready to review.',
+      list: ['Weekly movement goals', 'Remote check-ins', 'Exercise adherence reporting'],
+    },
+    Therapist: {
+      title: 'Therapist dashboard',
+      summary: 'Track assigned patients, monitor progress, and adjust care plans efficiently.',
+      list: ['Patient progress review', 'AI insights', 'Care plan updates'],
+    },
+    Admin: {
+      title: 'Admin dashboard',
+      summary: 'Manage program health, user access, and operational oversight across the platform.',
+      list: ['System monitoring', 'User management', 'Compliance review'],
+    },
+  }
+
+  const content = roleContent[user.role] || roleContent.Patient
+
+  return (
+    <main className="page-shell">
+      <div className="container dashboard-wrap">
+        <div className="dashboard-header">
+          <div>
+            <span className="eyebrow accent">{user.role}</span>
+            <h2>{content.title}</h2>
+          </div>
+          <span className="role-badge">{user.name}</span>
+        </div>
+
+        <div className="dashboard-panel">
+          <p>{content.summary}</p>
+          <ul>
+            {content.list.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </main>
+  )
+}
+
 function App() {
+  const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem('movecare-user')
+    return savedUser ? JSON.parse(savedUser) : null
+  })
+
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem('movecare-user', JSON.stringify(user))
+    }
+  }, [user])
+
+  const handleAuthComplete = (loggedInUser) => {
+    setUser(loggedInUser)
+  }
+
+  const handleLogout = () => {
+    setUser(null)
+  }
+
   return (
     <BrowserRouter>
       <div className="app-shell">
-        <Navbar />
+        <Navbar user={user} onLogout={handleLogout} />
 
         <Routes>
           <Route path="/" element={<HomePage />} />
@@ -329,6 +585,14 @@ function App() {
           <Route path="/features" element={<FeaturesPage />} />
           <Route path="/services" element={<ServicesPage />} />
           <Route path="/contact" element={<ContactPage />} />
+          <Route path="/login" element={<AuthPage mode="login" onAuthComplete={handleAuthComplete} />} />
+          <Route path="/register" element={<AuthPage mode="register" onAuthComplete={handleAuthComplete} />} />
+
+          <Route element={<ProtectedRoute user={user} />}>
+            <Route path="/dashboard" element={<DashboardPage user={user} />} />
+          </Route>
+
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
 
         <Footer />
