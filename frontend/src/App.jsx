@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   BrowserRouter,
   Navigate,
@@ -142,6 +142,8 @@ function Navbar({ user, onLogout }) {
               {user.role === 'Therapist' && <NavLink to="/patient-progress" className="secondary-btn small">Progress</NavLink>}
               {user.role === 'Patient' && <NavLink to="/progress" className="secondary-btn small">Progress</NavLink>}
               {user.role === 'Patient' && <NavLink to="/ai-assistant" className="secondary-btn small">AI guide</NavLink>}
+              {user.role === 'Therapist' && <NavLink to="/monitoring" className="secondary-btn small">Live monitor</NavLink>}
+              {user.role === 'Patient' && <NavLink to="/monitoring" className="secondary-btn small">Live monitor</NavLink>}
               <button type="button" className="primary-btn small" onClick={handleLogout}>
                 Logout
               </button>
@@ -531,6 +533,89 @@ function ProtectedRoute({ user, requiredRole }) {
   return <Outlet />
 }
 
+function formatElapsed(seconds = 0) {
+  const minutes = Math.floor(seconds / 60).toString().padStart(2, '0')
+  const remaining = Math.floor(seconds % 60).toString().padStart(2, '0')
+  return `${minutes}:${remaining}`
+}
+
+function LiveMonitoringCard({ role }) {
+  const [value, setValue] = useState(null)
+  useEffect(() => {
+    const load = () => apiRequest(role === 'Therapist' ? '/monitoring/therapist/live' : '/monitoring/patient/current').then(setValue).catch(() => {})
+    load()
+    const interval = window.setInterval(load, 5000)
+    return () => window.clearInterval(interval)
+  }, [role])
+  if (role === 'Therapist') {
+    const count = Array.isArray(value) ? value.length : 0
+    return <section className="monitoring-preview"><div><span className="card-eyebrow">Live monitoring</span><h3>{count ? `${count} active demo session${count === 1 ? '' : 's'}` : 'No active sessions'}</h3><p>Poll assigned patient sessions for exercise status and live signals.</p></div><NavLink className="secondary-btn small" to="/monitoring">Open monitor</NavLink></section>
+  }
+  return <section className="monitoring-preview"><div><span className="card-eyebrow">Session monitor</span><h3>{value?.status === 'Active' ? `${value.exercise?.name} in progress` : 'Start a monitored session'}</h3><p>{value?.status === 'Active' ? `${formatElapsed(value.elapsedSeconds)} elapsed · ${value.currentReps}/${value.targetReps} reps` : 'Use simulated session data to see your progress update live.'}</p></div><NavLink className="secondary-btn small" to="/monitoring">Open monitor</NavLink></section>
+}
+
+function PatientMonitoringPage() {
+  const [exerciseData, setExerciseData] = useState(null)
+  const [session, setSession] = useState(null)
+  const [selected, setSelected] = useState('')
+  const [painLevel, setPainLevel] = useState('3')
+  const [mobilityScore, setMobilityScore] = useState('60')
+  const [error, setError] = useState('')
+  const simulationRef = useRef(null)
+  const sessionRef = useRef(null)
+  const painRef = useRef(painLevel)
+  const mobilityRef = useRef(mobilityScore)
+
+  useEffect(() => { sessionRef.current = session }, [session])
+  useEffect(() => { painRef.current = painLevel }, [painLevel])
+  useEffect(() => { mobilityRef.current = mobilityScore }, [mobilityScore])
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [assigned, current] = await Promise.all([apiRequest('/exercises/patient/assigned'), apiRequest('/monitoring/patient/current')])
+        setExerciseData(assigned); setSession(current); if (!selected && assigned.plans[0]?.exercises[0]) setSelected(`${assigned.plans[0]._id}:${assigned.plans[0].exercises[0].exercise?._id}`)
+      } catch (loadError) { setError(loadError.message) }
+    }
+    load()
+  }, [selected])
+  const activeSessionId = session?._id
+  const activeSessionStatus = session?.status
+  useEffect(() => {
+    const currentSession = sessionRef.current
+    if (!currentSession || !['Active', 'Paused'].includes(currentSession.status)) return undefined
+    let elapsed = currentSession.elapsedSeconds
+    let reps = currentSession.currentReps
+    let pain = currentSession.painLevel ?? Number(painRef.current)
+    let mobility = currentSession.mobilityScore ?? Number(mobilityRef.current)
+    simulationRef.current = window.setInterval(async () => {
+      elapsed += 3; reps = Math.min(currentSession.targetReps, reps + 1); pain = Math.max(0, Math.min(10, pain + (reps % 4 === 0 ? 0.2 : -0.1))); mobility = Math.max(0, Math.min(100, mobility + (reps % 3 === 0 ? 1 : 0)))
+      try { const updated = await apiRequest(`/monitoring/patient/${currentSession._id}`, { method: 'PATCH', body: JSON.stringify({ elapsedSeconds: elapsed, currentReps: reps, painLevel: pain.toFixed(1), mobilityScore: Math.round(mobility) }) }); setSession(updated) } catch (updateError) { setError(updateError.message) }
+    }, 3000)
+    return () => window.clearInterval(simulationRef.current)
+  }, [activeSessionId, activeSessionStatus])
+
+  const start = async () => {
+    const [planId, exerciseId] = selected.split(':')
+    try { setSession(await apiRequest('/monitoring/patient/start', { method: 'POST', body: JSON.stringify({ planId, exerciseId }) })); setError('') } catch (startError) { setError(startError.message) }
+  }
+  const finish = async () => {
+    try { setSession(await apiRequest(`/monitoring/patient/${session._id}`, { method: 'PATCH', body: JSON.stringify({ status: 'Completed', painLevel, mobilityScore }) })) } catch (finishError) { setError(finishError.message) }
+  }
+  if (error && !exerciseData) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
+  if (!exerciseData) return <LoadingDashboard />
+  const options = exerciseData.plans.flatMap((plan) => plan.exercises.map((item) => ({ ...item, planId: plan._id, planName: plan.name })))
+  return <main className="page-shell monitoring-page"><div className="container management-wrap"><div className="management-heading"><span className="eyebrow accent">Simulated demo data</span><h2>Live exercise monitor</h2><p>Watch a safe, simulated session flow update the patient and therapist views in near real time.</p></div>{error && <div className="form-error" role="alert">{error}</div>}<section className="monitoring-stage"><div className="management-panel session-console"><div className="session-console-header"><div><span className="card-eyebrow">Exercise session</span><h3>{session?.exercise?.name || 'Choose an exercise'}</h3></div><span className={`session-status ${session?.status?.toLowerCase() || 'ready'}`}>{session?.status || 'Ready'}</span></div>{session ? <><div className="live-readings"><div><span>Elapsed</span><strong>{formatElapsed(session.elapsedSeconds)}</strong></div><div><span>Repetitions</span><strong>{session.currentReps}/{session.targetReps}</strong></div><div><span>Pain</span><strong>{session.painLevel ?? '--'}/10</strong></div><div><span>Mobility</span><strong>{session.mobilityScore ?? '--'}/100</strong></div></div><div className="session-progress"><span style={{ width: `${Math.min(100, (session.currentReps / session.targetReps) * 100)}%` }} /></div>{session.status === 'Active' && <div className="session-inputs"><label>Pain input<input type="number" min="0" max="10" value={painLevel} onChange={(event) => setPainLevel(event.target.value)} /></label><label>Mobility input<input type="number" min="0" max="100" value={mobilityScore} onChange={(event) => setMobilityScore(event.target.value)} /></label></div>}{session.status === 'Active' && <button type="button" className="primary-btn" onClick={finish}>Finish and save session</button>}{session.status === 'Completed' && <><p className="monitoring-complete">Session saved to your progress history.</p><button type="button" className="secondary-btn" onClick={() => setSession(null)}>Start another session</button></>}</> : <><label className="monitoring-select">Assigned exercise<select value={selected} onChange={(event) => setSelected(event.target.value)}><option value="">Select an exercise</option>{options.map((item) => <option value={`${item.planId}:${item.exercise?._id}`} key={`${item.planId}:${item.exercise?._id}`}>{item.exercise?.name} · {item.planName}</option>)}</select></label><button type="button" className="primary-btn" onClick={start} disabled={!selected}>Start simulated session</button></>}</div><aside className="management-panel monitoring-sidebar"><span className="card-eyebrow">How this demo works</span><h3>Live signal stream</h3><p>The demo sensor generates a small update every three seconds for elapsed time, repetitions, pain, and mobility.</p><div className="demo-indicator"><span /> Simulated data active</div><p className="ai-disclaimer">This is demonstration data, not a clinical measurement or wearable device. Stop and contact your care team if exercise causes concerning symptoms.</p><NavLink className="secondary-btn small" to="/progress">View progress history</NavLink></aside></section></div></main>
+}
+
+function TherapistMonitoringPage() {
+  const [sessions, setSessions] = useState(null)
+  const [error, setError] = useState('')
+  useEffect(() => { const load = () => apiRequest('/monitoring/therapist/live').then(setSessions).catch((loadError) => setError(loadError.message)); load(); const interval = window.setInterval(load, 3000); return () => window.clearInterval(interval) }, [])
+  if (error && !sessions) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
+  if (!sessions) return <LoadingDashboard />
+  return <main className="page-shell monitoring-page"><div className="container management-wrap"><div className="management-heading"><span className="eyebrow accent">Simulated demo data</span><h2>Live patient monitoring</h2><p>Monitor active exercise sessions from assigned patients. Updates refresh automatically every three seconds.</p></div>{error && <div className="form-error" role="alert">{error}</div>}{sessions.length ? <div className="live-session-grid">{sessions.map((session) => <article className="live-session-card" key={session._id}><div className="session-console-header"><div><span className="card-eyebrow">{session.patient?.user?.name}</span><h3>{session.exercise?.name}</h3></div><span className="session-status active">Live</span></div><div className="live-readings"><div><span>Elapsed</span><strong>{formatElapsed(session.elapsedSeconds)}</strong></div><div><span>Reps</span><strong>{session.currentReps}/{session.targetReps}</strong></div><div><span>Pain</span><strong>{session.painLevel ?? '--'}/10</strong></div><div><span>Mobility</span><strong>{session.mobilityScore ?? '--'}/100</strong></div></div><div className="session-progress"><span style={{ width: `${Math.min(100, (session.currentReps / session.targetReps) * 100)}%` }} /></div><small className="demo-label">Demo sensor · Updated {formatDate(session.updatedAt)}</small></article>)}</div> : <section className="management-panel"><p className="empty-state">No active patient sessions. This panel will update when a patient starts a demo session.</p></section>}</div></main>
+}
+
 function DashboardPage({ user }) {
   const roleContent = {
     Patient: {
@@ -571,6 +656,7 @@ function DashboardPage({ user }) {
             ))}
           </ul>
         </div>
+        {user.role === 'Therapist' && <LiveMonitoringCard role="Therapist" />}
       </div>
     </main>
   )
@@ -731,6 +817,7 @@ function PatientDashboardPage({ user }) {
             ) : <p className="empty-state">You are all caught up.</p>}
           </DashboardCard>
         </div>
+        <LiveMonitoringCard role="Patient" />
         <RecommendationPanel />
       </div>
     </main>
@@ -1024,6 +1111,7 @@ function App() {
             <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/patient-progress" element={<TherapistProgressPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/progress" element={<PatientProgressPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/ai-assistant" element={<AssistantPage />} /></Route>
+            <Route path="/monitoring" element={user.role === 'Patient' ? <PatientMonitoringPage /> : <TherapistMonitoringPage />} />
             <Route path="/consultation/:id" element={<ConsultationPage user={user} />} />
           </Route>
 

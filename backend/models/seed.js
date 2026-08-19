@@ -8,6 +8,7 @@ import ExercisePlan from './ExercisePlan.js';
 import Appointment from './Appointment.js';
 import Progress from './Progress.js';
 import Notification from './Notification.js';
+import MonitoringSession from './MonitoringSession.js';
 
 /**
  * Seed database with sample data for development
@@ -38,6 +39,7 @@ const seedDatabase = async () => {
       Appointment.deleteMany({}),
       Progress.deleteMany({}),
       Notification.deleteMany({}),
+      MonitoringSession.deleteMany({}),
     ]);
     console.log('Cleared existing data');
 
