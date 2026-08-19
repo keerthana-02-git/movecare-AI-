@@ -9,6 +9,7 @@ import patientRoutes from './routes/patientRoutes.js';
 import exerciseRoutes from './routes/exerciseRoutes.js';
 import appointmentRoutes from './routes/appointmentRoutes.js';
 import progressRoutes from './routes/progressRoutes.js';
+import aiRoutes from './routes/aiRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,6 +30,7 @@ app.use('/api/patients', patientRoutes);
 app.use('/api/exercises', exerciseRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/progress', progressRoutes);
+app.use('/api/ai', aiRoutes);
 
 const startServer = async (port = PORT) => {
   await connectDB();

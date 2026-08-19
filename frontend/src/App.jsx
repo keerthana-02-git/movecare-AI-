@@ -141,6 +141,7 @@ function Navbar({ user, onLogout }) {
               {user.role === 'Patient' && <NavLink to="/appointments" className="secondary-btn small">Appointments</NavLink>}
               {user.role === 'Therapist' && <NavLink to="/patient-progress" className="secondary-btn small">Progress</NavLink>}
               {user.role === 'Patient' && <NavLink to="/progress" className="secondary-btn small">Progress</NavLink>}
+              {user.role === 'Patient' && <NavLink to="/ai-assistant" className="secondary-btn small">AI guide</NavLink>}
               <button type="button" className="primary-btn small" onClick={handleLogout}>
                 Logout
               </button>
@@ -599,6 +600,13 @@ function LoadingDashboard() {
   )
 }
 
+function RecommendationPanel() {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState('')
+  useEffect(() => { apiRequest('/ai/recommendations').then(setData).catch((loadError) => setError(loadError.message)) }, [])
+  return <section className="ai-recommendation-panel"><div className="ai-panel-heading"><div><span className="card-eyebrow">MoveCare AI feature</span><h3>Personalized exercise recommendations</h3><p>Suggestions are generated from your recorded condition, age, pain, mobility, and exercise history.</p></div><span className="ai-badge">AI guide</span></div>{error && <div className="ai-inline-error">{error}</div>}{!data && !error && <div className="ai-loading">Reviewing your care data...</div>}{data && <><div className="ai-inputs"><span>Condition: <strong>{data.inputProfile.condition}</strong></span><span>Age: <strong>{data.inputProfile.age}</strong></span><span>Pain: <strong>{data.inputProfile.painLevel === null ? 'Not recorded' : `${data.inputProfile.painLevel}/10`}</strong></span><span>Mobility: <strong>{data.inputProfile.mobilityLevel === null ? 'Not recorded' : `${data.inputProfile.mobilityLevel}/100`}</strong></span></div><div className="recommendation-list">{data.recommendations.length ? data.recommendations.map((item) => <article className="recommendation-item" key={item.exercise._id}><div><div className="recommendation-title"><strong>{item.exercise.name}</strong>{item.alreadyAssigned && <span className="assigned-tag">In your plan</span>}</div><p>{item.reason}</p></div><div className="recommendation-meta"><span>{item.suggestedDifficulty}</span><span>{item.suggestedDuration} min</span><span>{item.suggestedFrequency}</span></div></article>) : <p className="empty-state">Your exercise library does not have a matching suggestion yet.</p>}</div><p className="ai-disclaimer">{data.disclaimer}</p></>}</section>
+}
+
 function formatDate(value) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value))
 }
@@ -723,6 +731,7 @@ function PatientDashboardPage({ user }) {
             ) : <p className="empty-state">You are all caught up.</p>}
           </DashboardCard>
         </div>
+        <RecommendationPanel />
       </div>
     </main>
   )
@@ -876,6 +885,21 @@ function PatientProgressPage() {
   return <main className="page-shell progress-page"><div className="container management-wrap"><div className="management-heading"><span className="eyebrow accent">Your recovery data</span><h2>Progress tracking</h2><p>See how your exercise routine, pain, mobility, and attendance are changing over time.</p></div><div className="progress-metrics"><ProgressMetric label="Exercise adherence" value={summary.exerciseAdherence} suffix="%" /><ProgressMetric label="Completed sessions" value={summary.completedSessions} /><ProgressMetric label="Mobility score" value={summary.mobilityScore} suffix="/100" /><ProgressMetric label="Appointment attendance" value={summary.appointmentAttendance} suffix="%" /><ProgressMetric label="Average pain" value={summary.averagePain} suffix="/10" /></div><div className="progress-chart-grid"><section className="management-panel chart-panel"><div className="panel-heading"><div><span className="card-eyebrow">Consistency</span><h3>Exercise completion</h3></div></div><ProgressChart data={timeline} dataKey="completionRate" color="#0d8b85" emptyLabel="Complete an exercise to begin your timeline." /></section><section className="management-panel chart-panel"><div className="panel-heading"><div><span className="card-eyebrow">Movement signal</span><h3>Mobility score</h3></div></div><ProgressChart data={timeline.filter((item) => item.mobilityScore !== null)} dataKey="mobilityScore" color="#2b77d1" emptyLabel="Add a mobility score when completing an exercise." /></section><section className="management-panel chart-panel"><div className="panel-heading"><div><span className="card-eyebrow">Comfort signal</span><h3>Pain level</h3></div></div><ProgressChart data={timeline.filter((item) => item.pain !== null)} dataKey="pain" color="#e28a3d" max={10} emptyLabel="Add a pain level when completing an exercise." /></section></div><section className="management-panel"><div className="panel-heading"><div><span className="card-eyebrow">Session history</span><h3>Recent sessions</h3></div></div>{entries.length ? <div className="progress-table">{entries.slice().reverse().slice(0, 12).map((entry) => <div className="progress-table-row" key={entry._id}><span>{formatDate(entry.datePerformed)}</span><strong>{entry.exercise?.name || 'Exercise'}</strong><span className="completion-tag complete">{entry.completionStatus}</span><span>{entry.mobilityScore === undefined ? '--' : `${entry.mobilityScore}/100`} mobility</span><span>{entry.painLevel === undefined ? '--' : `${entry.painLevel}/10`} pain</span></div>)}</div> : <p className="empty-state">No progress sessions recorded yet.</p>}</section></div></main>
 }
 
+function AssistantPage() {
+  const [messages, setMessages] = useState([{ role: 'assistant', text: 'I can help explain your MoveCare exercise suggestions, progress, and appointments.' }])
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const sendMessage = async (event) => {
+    event.preventDefault()
+    if (!message.trim()) return
+    const currentMessage = message.trim()
+    setMessages((current) => [...current, { role: 'user', text: currentMessage }]); setMessage(''); setLoading(true); setError('')
+    try { const response = await apiRequest('/ai/assistant', { method: 'POST', body: JSON.stringify({ message: currentMessage }) }); setMessages((current) => [...current, { role: 'assistant', text: response.answer }]) } catch (sendError) { setError(sendError.message) } finally { setLoading(false) }
+  }
+  return <main className="page-shell assistant-page"><div className="container assistant-wrap"><div className="management-heading"><span className="eyebrow accent">MoveCare AI feature</span><h2>Recovery assistant</h2><p>A simple software guide for understanding your dashboard. It does not diagnose conditions or replace your care team.</p></div><section className="assistant-panel"><div className="assistant-messages">{messages.map((item, index) => <div className={`assistant-message ${item.role}`} key={`${item.role}-${index}`}><span>{item.role === 'assistant' ? 'AI guide' : 'You'}</span><p>{item.text}</p></div>)}</div>{error && <div className="form-error" role="alert">{error}</div>}<form className="assistant-form" onSubmit={sendMessage}><input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ask about progress, exercises, or appointments" aria-label="Ask the recovery assistant" /><button className="primary-btn" disabled={loading}>{loading ? 'Thinking...' : 'Send'}</button></form><p className="ai-disclaimer">This assistant provides general software guidance only. Contact a licensed healthcare professional for medical questions or urgent concerns.</p></section></div></main>
+}
+
 function TherapistProgressPage() {
   const [patients, setPatients] = useState(null)
   const [selectedId, setSelectedId] = useState('')
@@ -999,6 +1023,7 @@ function App() {
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/appointments" element={<PatientAppointmentsPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/patient-progress" element={<TherapistProgressPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/progress" element={<PatientProgressPage />} /></Route>
+            <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/ai-assistant" element={<AssistantPage />} /></Route>
             <Route path="/consultation/:id" element={<ConsultationPage user={user} />} />
           </Route>
 
