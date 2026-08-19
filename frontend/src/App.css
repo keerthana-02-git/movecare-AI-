@@ -543,6 +543,42 @@
 .dashboard-loading, .dashboard-error { padding: 2rem; border-radius: 1rem; background: #fff; border: 1px solid #e1eaf0; color: #526d84; }
 .dashboard-error strong { color: #b42318; }
 .dashboard-error p { margin: 0.5rem 0 0; }
+.management-wrap { max-width: 1180px; }
+.management-heading { margin-bottom: 1.5rem; }
+.management-heading h2 { margin: 0 0 0.5rem; color: #142d48; }
+.management-heading p { margin: 0; color: #526d84; }
+.management-layout { display: grid; grid-template-columns: 1.25fr 0.75fr; gap: 1rem; margin-bottom: 1rem; }
+.management-panel { background: rgba(255, 255, 255, 0.92); border: 1px solid rgba(19, 92, 151, 0.1); border-radius: 1rem; padding: 1.35rem; box-shadow: 0 20px 28px rgba(12, 37, 58, 0.05); }
+.management-panel h3 { margin: 0 0 1.2rem; color: #163653; }
+.exercise-form, .assignment-form, .completion-form { display: grid; gap: 0.9rem; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.85rem; }
+.exercise-form label, .assignment-form label, .completion-form label { display: grid; gap: 0.35rem; color: #1a3559; font-size: 0.85rem; font-weight: 700; }
+.exercise-form input, .exercise-form select, .exercise-form textarea, .assignment-form input, .assignment-form select, .assignment-form textarea, .completion-form input, .completion-form textarea { width: 100%; border: 1px solid #d6e4f1; border-radius: 0.65rem; padding: 0.7rem 0.8rem; color: #172b46; background: #f7fbff; font: inherit; }
+.exercise-form textarea, .completion-form textarea { min-height: 5rem; resize: vertical; }
+.form-actions, .library-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem; }
+.success-message { margin-bottom: 1rem; border: 1px solid rgba(24, 161, 132, 0.2); border-radius: 0.7rem; padding: 0.8rem 1rem; background: rgba(24, 161, 132, 0.1); color: #137d5d; font-weight: 700; }
+.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.2rem; }
+.panel-heading h3 { margin: 0; }
+.count-badge { display: grid; min-width: 2rem; height: 2rem; place-items: center; border-radius: 50%; background: #edf5fd; color: #0d5ea8; font-weight: 800; }
+.exercise-library-grid, .patient-exercise-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.library-item, .patient-exercise-card { border: 1px solid #e3ebf1; border-radius: 0.85rem; padding: 1rem; background: #fbfdff; }
+.library-item-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.8rem; }
+.exercise-category, .completion-tag { color: #0d8b85; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.difficulty-tag, .completion-tag { border-radius: 999px; padding: 0.25rem 0.5rem; background: #edf5fd; color: #0d5ea8; font-size: 0.7rem; }
+.library-item h4, .patient-exercise-card h3 { margin: 0 0 0.5rem; color: #163653; }
+.library-item p, .patient-exercise-card > p { min-height: 2.8rem; margin: 0 0 1rem; color: #526d84; font-size: 0.86rem; line-height: 1.5; }
+.exercise-meta { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-bottom: 1rem; color: #74899d; font-size: 0.78rem; }
+.exercise-meta span { border-right: 1px solid #d6e1e9; padding-right: 0.55rem; }
+.exercise-meta span:last-child { border-right: 0; }
+.danger-btn { border: 0; background: transparent; color: #b42318; cursor: pointer; font: inherit; font-size: 0.85rem; font-weight: 700; }
+.patient-exercise-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.patient-exercise-card { background: #fff; padding: 1.35rem; }
+.completion-tag.complete { background: rgba(24, 161, 132, 0.12); color: #137d5d; }
+.instruction-box { margin: 1rem 0; border-left: 3px solid #19a59d; padding: 0.8rem 0.9rem; background: #f1faf9; color: #1a3559; }
+.instruction-box p { margin: 0.45rem 0; color: #526d84; white-space: pre-line; line-height: 1.55; }
+.instruction-box small { color: #96600c; }
+.resource-link { display: inline-block; margin-bottom: 1rem; color: #0d5ea8; font-size: 0.85rem; font-weight: 700; }
+.completion-button { width: 100%; }
 
 @media (max-width: 820px) {
   .nav-wrap,
@@ -562,6 +598,8 @@
   .dashboard-grid { grid-template-columns: 1fr; }
   .exercise-card { grid-row: auto; }
   .dashboard-hero { align-items: flex-start; }
+  .management-layout, .exercise-library-grid, .patient-exercise-grid { grid-template-columns: 1fr; }
+  .form-grid { grid-template-columns: 1fr; }
 
   .nav-wrap {
     padding: 1rem 0;

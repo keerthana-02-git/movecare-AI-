@@ -46,6 +46,10 @@ const exerciseSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    imageUrl: {
+      type: String,
+      trim: true,
+    },
     targetBodyPart: {
       type: String,
       required: [true, 'Target body part is required'],

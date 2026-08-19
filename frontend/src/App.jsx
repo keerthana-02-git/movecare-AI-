@@ -12,6 +12,20 @@ import './App.css'
 
 const API_BASE_URL = 'http://localhost:5000/api'
 
+async function apiRequest(path, options = {}) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${localStorage.getItem('movecare-token')}`,
+      ...options.headers,
+    },
+  })
+  const data = await response.json()
+  if (!response.ok) throw new Error(data.message || 'Request failed')
+  return data
+}
+
 const navItems = [
   { label: 'Home', to: '/' },
   { label: 'About', to: '/about' },
@@ -120,6 +134,8 @@ function Navbar({ user, onLogout }) {
               <NavLink to="/dashboard" className="secondary-btn small">
                 Dashboard
               </NavLink>
+              {user.role === 'Therapist' && <NavLink to="/exercise-management" className="secondary-btn small">Exercises</NavLink>}
+              {user.role === 'Patient' && <NavLink to="/my-exercises" className="secondary-btn small">My exercises</NavLink>}
               <button type="button" className="primary-btn small" onClick={handleLogout}>
                 Logout
               </button>
@@ -707,6 +723,126 @@ function PatientDashboardPage({ user }) {
   )
 }
 
+const emptyExercise = {
+  name: '', description: '', targetBodyPart: '', category: 'Strengthening', difficulty: 'Medium',
+  duration: 10, sets: 3, reps: 10, instructions: '', videoUrl: '', imageUrl: '', precautions: '',
+}
+
+function ExerciseForm({ form, setForm, onSubmit, editing, onCancel, loading }) {
+  const updateField = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }))
+
+  return (
+    <form className="exercise-form" onSubmit={onSubmit}>
+      <div className="form-grid">
+        <label>Exercise name<input name="name" value={form.name} onChange={updateField} required /></label>
+        <label>Body part<input name="targetBodyPart" value={form.targetBodyPart} onChange={updateField} placeholder="Knee, shoulder..." required /></label>
+        <label>Category<select name="category" value={form.category} onChange={updateField}><option>Stretching</option><option>Strengthening</option><option>Balance</option><option>Cardio</option><option>Flexibility</option><option>Coordination</option></select></label>
+        <label>Difficulty<select name="difficulty" value={form.difficulty} onChange={updateField}><option>Easy</option><option>Medium</option><option>Hard</option></select></label>
+        <label>Duration (minutes)<input type="number" min="1" name="duration" value={form.duration} onChange={updateField} required /></label>
+        <label>Sets<input type="number" min="1" name="sets" value={form.sets} onChange={updateField} required /></label>
+        <label>Repetitions<input type="number" min="1" name="reps" value={form.reps} onChange={updateField} required /></label>
+        <label>Video URL<input type="url" name="videoUrl" value={form.videoUrl} onChange={updateField} placeholder="https://..." /></label>
+        <label>Image URL<input type="url" name="imageUrl" value={form.imageUrl} onChange={updateField} placeholder="https://..." /></label>
+      </div>
+      <label>Description<textarea name="description" value={form.description} onChange={updateField} required /></label>
+      <label>Instructions<textarea name="instructions" value={form.instructions} onChange={updateField} placeholder="Step-by-step guidance" required /></label>
+      <label>Precautions<textarea name="precautions" value={form.precautions} onChange={updateField} placeholder="Optional safety notes" /></label>
+      <div className="form-actions"><button className="primary-btn" disabled={loading}>{loading ? 'Saving...' : editing ? 'Save changes' : 'Create exercise'}</button>{editing && <button type="button" className="secondary-btn" onClick={onCancel}>Cancel</button>}</div>
+    </form>
+  )
+}
+
+function ExerciseManagementPage() {
+  const [exercises, setExercises] = useState([])
+  const [options, setOptions] = useState({ patients: [], exercises: [] })
+  const [form, setForm] = useState(emptyExercise)
+  const [assignment, setAssignment] = useState({ patientId: '', exerciseId: '', planName: '', startDate: '', endDate: '', frequency: 'Daily' })
+  const [editingId, setEditingId] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      const [exerciseData, optionData] = await Promise.all([apiRequest('/exercises'), apiRequest('/exercises/assignment-options')])
+      setExercises(exerciseData); setOptions(optionData); setError('')
+    } catch (loadError) { setError(loadError.message) } finally { setLoading(false) }
+  }
+
+  useEffect(() => { loadData() }, [])
+
+  const handleExerciseSubmit = async (event) => {
+    event.preventDefault()
+    try {
+      setSaving(true); setError(''); setNotice('')
+      const saved = await apiRequest(editingId ? `/exercises/${editingId}` : '/exercises', { method: editingId ? 'PUT' : 'POST', body: JSON.stringify(form) })
+      setExercises((current) => editingId ? current.map((item) => item._id === saved._id ? saved : item) : [saved, ...current])
+      setForm(emptyExercise); setEditingId(null); setNotice(editingId ? 'Exercise updated.' : 'Exercise created.')
+    } catch (saveError) { setError(saveError.message) } finally { setSaving(false) }
+  }
+
+  const handleDelete = async (exercise) => {
+    if (!window.confirm(`Delete ${exercise.name}?`)) return
+    try { await apiRequest(`/exercises/${exercise._id}`, { method: 'DELETE' }); setExercises((current) => current.filter((item) => item._id !== exercise._id)); setNotice('Exercise deleted.') } catch (deleteError) { setError(deleteError.message) }
+  }
+
+  const handleAssignment = async (event) => {
+    event.preventDefault()
+    try {
+      setSaving(true); setError(''); setNotice('')
+      await apiRequest('/exercises/assign', { method: 'POST', body: JSON.stringify(assignment) })
+      setAssignment({ patientId: '', exerciseId: '', planName: '', startDate: '', endDate: '', frequency: 'Daily' }); setNotice('Exercise assigned to the patient.')
+    } catch (assignmentError) { setError(assignmentError.message) } finally { setSaving(false) }
+  }
+
+  return (
+    <main className="page-shell"><div className="container management-wrap">
+      <div className="management-heading"><div><span className="eyebrow accent">Therapist workspace</span><h2>Exercise management</h2><p>Create a library of clear, trackable exercises and assign them to your patients.</p></div></div>
+      {error && <div className="form-error" role="alert">{error}</div>}{notice && <div className="success-message" role="status">{notice}</div>}
+      <div className="management-layout">
+        <section className="management-panel"><h3>{editingId ? 'Edit exercise' : 'Create exercise'}</h3><ExerciseForm form={form} setForm={setForm} onSubmit={handleExerciseSubmit} editing={Boolean(editingId)} onCancel={() => { setEditingId(null); setForm(emptyExercise) }} loading={saving} /></section>
+        <section className="management-panel"><h3>Assign an exercise</h3><form className="assignment-form" onSubmit={handleAssignment}>
+          <label>Patient<select value={assignment.patientId} onChange={(event) => setAssignment({ ...assignment, patientId: event.target.value })} required><option value="">Select patient</option>{options.patients.map((patient) => <option key={patient._id} value={patient._id}>{patient.user?.name || patient.user?.email}</option>)}</select></label>
+          <label>Exercise<select value={assignment.exerciseId} onChange={(event) => setAssignment({ ...assignment, exerciseId: event.target.value })} required><option value="">Select exercise</option>{options.exercises.map((exercise) => <option key={exercise._id} value={exercise._id}>{exercise.name}</option>)}</select></label>
+          <label>Plan name<input value={assignment.planName} onChange={(event) => setAssignment({ ...assignment, planName: event.target.value })} placeholder="e.g. Knee recovery week 1" required /></label>
+          <div className="form-grid"><label>Start date<input type="date" value={assignment.startDate} onChange={(event) => setAssignment({ ...assignment, startDate: event.target.value })} required /></label><label>End date<input type="date" value={assignment.endDate} onChange={(event) => setAssignment({ ...assignment, endDate: event.target.value })} required /></label></div>
+          <label>Frequency<select value={assignment.frequency} onChange={(event) => setAssignment({ ...assignment, frequency: event.target.value })}><option>Daily</option><option value="Every2Days">Every 2 days</option><option value="EveryOtherDay">Every other day</option><option>Twice</option><option>Weekly</option></select></label>
+          <button className="primary-btn" disabled={saving || !options.patients.length}>{saving ? 'Assigning...' : 'Assign exercise'}</button>
+        </form></section>
+      </div>
+      <section className="management-panel exercise-library"><div className="panel-heading"><div><span className="card-eyebrow">Your library</span><h3>Exercises</h3></div><span className="count-badge">{loading ? '...' : exercises.length}</span></div>
+        {loading ? <div className="dashboard-loading">Loading exercises...</div> : exercises.length ? <div className="exercise-library-grid">{exercises.map((exercise) => <article className="library-item" key={exercise._id}><div className="library-item-top"><span className="exercise-category">{exercise.category}</span><span className="difficulty-tag">{exercise.difficulty}</span></div><h4>{exercise.name}</h4><p>{exercise.description}</p><div className="exercise-meta"><span>{exercise.targetBodyPart}</span><span>{exercise.duration} min</span><span>{exercise.sets} × {exercise.reps}</span></div><div className="library-actions"><button type="button" className="secondary-btn small" onClick={() => { setEditingId(exercise._id); setForm(exercise) }}>Edit</button><button type="button" className="danger-btn" onClick={() => handleDelete(exercise)}>Delete</button></div></article>)}</div> : <p className="empty-state">Create your first exercise to start building the library.</p>}
+      </section>
+    </div></main>
+  )
+}
+
+function PatientExercisesPage() {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState('')
+  const [completing, setCompleting] = useState('')
+  const [pain, setPain] = useState('')
+  const [notes, setNotes] = useState('')
+
+  const loadExercises = async () => {
+    try { setData(await apiRequest('/exercises/patient/assigned')); setError('') } catch (loadError) { setError(loadError.message) }
+  }
+  useEffect(() => { loadExercises() }, [])
+
+  const completeExercise = async (exerciseId, planId) => {
+    try { await apiRequest(`/exercises/patient/${exerciseId}/complete`, { method: 'POST', body: JSON.stringify({ planId, painLevel: pain, notes }) }); setCompleting(''); setPain(''); setNotes(''); await loadExercises() } catch (completeError) { setError(completeError.message) }
+  }
+
+  if (error && !data) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
+  if (!data) return <LoadingDashboard />
+
+  const completed = new Set(data.progress.filter((item) => item.completionStatus === 'Completed').map((item) => `${item.exercise}-${item.exercisePlan}`))
+  const exercises = data.plans.flatMap((plan) => plan.exercises.map((item) => ({ ...item, planId: plan._id, planName: plan.name })))
+  return <main className="page-shell"><div className="container management-wrap"><div className="management-heading"><div><span className="eyebrow accent">Your movement plan</span><h2>Assigned exercises</h2><p>Follow each instruction at your own pace and record the session when you finish.</p></div></div>{error && <div className="form-error" role="alert">{error}</div>}{exercises.length ? <div className="patient-exercise-grid">{exercises.map((item) => { const exercise = item.exercise; const key = `${exercise?._id}-${item.planId}`; const isComplete = completed.has(key); return <article className="patient-exercise-card" key={key}><div className="library-item-top"><span className="exercise-category">{item.planName}</span><span className={`completion-tag ${isComplete ? 'complete' : ''}`}>{isComplete ? 'Completed' : item.frequency}</span></div><h3>{exercise?.name || 'Exercise'}</h3><p>{exercise?.description}</p><div className="exercise-meta"><span>{exercise?.targetBodyPart}</span><span>{exercise?.duration} min</span><span>{exercise?.sets} × {exercise?.reps}</span></div><div className="instruction-box"><strong>Instructions</strong><p>{exercise?.instructions}</p>{exercise?.precautions && <small>Safety: {exercise.precautions}</small>}</div>{exercise?.videoUrl && <a className="resource-link" href={exercise.videoUrl} target="_blank" rel="noreferrer">Watch exercise video</a>}{!isComplete && (completing === key ? <div className="completion-form"><label>Pain level (0-10)<input type="number" min="0" max="10" value={pain} onChange={(event) => setPain(event.target.value)} /></label><label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="How did it feel?" /></label><div className="form-actions"><button type="button" className="primary-btn" onClick={() => completeExercise(exercise._id, item.planId)}>Mark completed</button><button type="button" className="secondary-btn" onClick={() => setCompleting('')}>Cancel</button></div></div> : <button type="button" className="primary-btn completion-button" onClick={() => setCompleting(key)}>Mark as completed</button>)}</article> })}</div> : <div className="dashboard-panel"><p className="empty-state">Your therapist has not assigned any exercises yet.</p></div>}</div></main>
+}
+
 function App() {
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem('movecare-user')
@@ -743,6 +879,8 @@ function App() {
 
           <Route element={<ProtectedRoute user={user} />}>
             <Route path="/dashboard" element={user.role === 'Patient' ? <PatientDashboardPage user={user} /> : <DashboardPage user={user} />} />
+            <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/exercise-management" element={<ExerciseManagementPage />} /></Route>
+            <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/my-exercises" element={<PatientExercisesPage />} /></Route>
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
