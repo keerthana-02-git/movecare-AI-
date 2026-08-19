@@ -617,6 +617,35 @@
 .consultation-note { margin-top: 1.5rem; border-left: 3px solid #19a59d; padding: 0.8rem; background: #f1faf9; }
 .consultation-note strong { color: #163653; font-size: 0.85rem; }
 .consultation-note p { margin: 0.4rem 0 0; color: #526d84; font-size: 0.8rem; line-height: 1.5; }
+.progress-page { background: radial-gradient(circle at 78% 0%, rgba(43, 119, 209, 0.1), transparent 30rem); }
+.progress-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.8rem; margin-bottom: 1rem; }
+.progress-metric { display: grid; gap: 0.4rem; border: 1px solid rgba(19, 92, 151, 0.1); border-radius: 0.85rem; padding: 1rem; background: rgba(255, 255, 255, 0.9); }
+.progress-metric span { color: #74899d; font-size: 0.75rem; }
+.progress-metric strong { color: #163653; font-size: 1.45rem; }
+.progress-chart-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.chart-panel { min-width: 0; }
+.chart-panel h3 { margin: 0 0 1rem; color: #163653; }
+.progress-chart svg { width: 100%; height: 13rem; overflow: visible; }
+.progress-chart line { stroke: #e5edf2; stroke-width: 1; }
+.progress-chart polyline { vector-effect: non-scaling-stroke; }
+.chart-labels { display: flex; justify-content: space-between; color: #74899d; font-size: 0.72rem; }
+.chart-empty { display: grid; min-height: 13rem; place-items: center; border: 1px dashed #cbd9e3; border-radius: 0.7rem; padding: 1rem; color: #74899d; text-align: center; font-size: 0.85rem; }
+.progress-table { display: grid; gap: 0.1rem; }
+.progress-table-row { display: grid; grid-template-columns: 7rem 1fr 7rem 7rem 6rem; align-items: center; gap: 0.8rem; border-bottom: 1px solid #edf1f4; padding: 0.8rem 0; color: #526d84; font-size: 0.8rem; }
+.progress-table-row:last-child { border-bottom: 0; }
+.progress-table-row strong { color: #163653; }
+.therapist-progress-layout { display: grid; grid-template-columns: 17rem 1fr; align-items: start; gap: 1rem; }
+.patient-progress-list h3 { margin: 0 0 0.8rem; color: #163653; }
+.patient-progress-option { width: 100%; display: flex; align-items: center; gap: 0.7rem; border: 0; border-bottom: 1px solid #edf1f4; padding: 0.8rem 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
+.patient-progress-option:last-child { border-bottom: 0; }
+.patient-progress-option.selected { border-radius: 0.6rem; padding-left: 0.45rem; background: #f1faf9; }
+.patient-progress-option > span:last-child { display: grid; gap: 0.2rem; }
+.patient-progress-option strong { color: #163653; }
+.patient-progress-option small { color: #74899d; font-size: 0.72rem; }
+.patient-progress-detail { min-width: 0; }
+.progress-detail-heading { margin-bottom: 1rem; }
+.progress-detail-heading h3 { margin: 0 0 0.3rem; color: #163653; font-size: 1.5rem; }
+.progress-detail-heading p { margin: 0; color: #526d84; }
 
 @media (max-width: 820px) {
   .nav-wrap,
@@ -642,6 +671,8 @@
   .appointment-row { grid-template-columns: 1fr; align-items: start; }
   .appointment-actions { justify-content: flex-start; }
   .consultation-header { align-items: flex-start; flex-direction: column; }
+  .progress-metrics, .progress-chart-grid, .therapist-progress-layout { grid-template-columns: 1fr; }
+  .progress-table-row { grid-template-columns: 1fr 1fr; }
 
   .nav-wrap {
     padding: 1rem 0;

@@ -139,6 +139,8 @@ function Navbar({ user, onLogout }) {
               {user.role === 'Patient' && <NavLink to="/my-exercises" className="secondary-btn small">My exercises</NavLink>}
               {user.role === 'Therapist' && <NavLink to="/therapist-appointments" className="secondary-btn small">Appointments</NavLink>}
               {user.role === 'Patient' && <NavLink to="/appointments" className="secondary-btn small">Appointments</NavLink>}
+              {user.role === 'Therapist' && <NavLink to="/patient-progress" className="secondary-btn small">Progress</NavLink>}
+              {user.role === 'Patient' && <NavLink to="/progress" className="secondary-btn small">Progress</NavLink>}
               <button type="button" className="primary-btn small" onClick={handleLogout}>
                 Logout
               </button>
@@ -827,6 +829,7 @@ function PatientExercisesPage() {
   const [error, setError] = useState('')
   const [completing, setCompleting] = useState('')
   const [pain, setPain] = useState('')
+  const [mobilityScore, setMobilityScore] = useState('')
   const [notes, setNotes] = useState('')
 
   const loadExercises = async () => {
@@ -835,7 +838,7 @@ function PatientExercisesPage() {
   useEffect(() => { loadExercises() }, [])
 
   const completeExercise = async (exerciseId, planId) => {
-    try { await apiRequest(`/exercises/patient/${exerciseId}/complete`, { method: 'POST', body: JSON.stringify({ planId, painLevel: pain, notes }) }); setCompleting(''); setPain(''); setNotes(''); await loadExercises() } catch (completeError) { setError(completeError.message) }
+    try { await apiRequest(`/exercises/patient/${exerciseId}/complete`, { method: 'POST', body: JSON.stringify({ planId, painLevel: pain, mobilityScore, notes }) }); setCompleting(''); setPain(''); setMobilityScore(''); setNotes(''); await loadExercises() } catch (completeError) { setError(completeError.message) }
   }
 
   if (error && !data) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
@@ -843,7 +846,46 @@ function PatientExercisesPage() {
 
   const completed = new Set(data.progress.filter((item) => item.completionStatus === 'Completed').map((item) => `${item.exercise}-${item.exercisePlan}`))
   const exercises = data.plans.flatMap((plan) => plan.exercises.map((item) => ({ ...item, planId: plan._id, planName: plan.name })))
-  return <main className="page-shell"><div className="container management-wrap"><div className="management-heading"><div><span className="eyebrow accent">Your movement plan</span><h2>Assigned exercises</h2><p>Follow each instruction at your own pace and record the session when you finish.</p></div></div>{error && <div className="form-error" role="alert">{error}</div>}{exercises.length ? <div className="patient-exercise-grid">{exercises.map((item) => { const exercise = item.exercise; const key = `${exercise?._id}-${item.planId}`; const isComplete = completed.has(key); return <article className="patient-exercise-card" key={key}><div className="library-item-top"><span className="exercise-category">{item.planName}</span><span className={`completion-tag ${isComplete ? 'complete' : ''}`}>{isComplete ? 'Completed' : item.frequency}</span></div><h3>{exercise?.name || 'Exercise'}</h3><p>{exercise?.description}</p><div className="exercise-meta"><span>{exercise?.targetBodyPart}</span><span>{exercise?.duration} min</span><span>{exercise?.sets} × {exercise?.reps}</span></div><div className="instruction-box"><strong>Instructions</strong><p>{exercise?.instructions}</p>{exercise?.precautions && <small>Safety: {exercise.precautions}</small>}</div>{exercise?.videoUrl && <a className="resource-link" href={exercise.videoUrl} target="_blank" rel="noreferrer">Watch exercise video</a>}{!isComplete && (completing === key ? <div className="completion-form"><label>Pain level (0-10)<input type="number" min="0" max="10" value={pain} onChange={(event) => setPain(event.target.value)} /></label><label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="How did it feel?" /></label><div className="form-actions"><button type="button" className="primary-btn" onClick={() => completeExercise(exercise._id, item.planId)}>Mark completed</button><button type="button" className="secondary-btn" onClick={() => setCompleting('')}>Cancel</button></div></div> : <button type="button" className="primary-btn completion-button" onClick={() => setCompleting(key)}>Mark as completed</button>)}</article> })}</div> : <div className="dashboard-panel"><p className="empty-state">Your therapist has not assigned any exercises yet.</p></div>}</div></main>
+  return <main className="page-shell"><div className="container management-wrap"><div className="management-heading"><div><span className="eyebrow accent">Your movement plan</span><h2>Assigned exercises</h2><p>Follow each instruction at your own pace and record the session when you finish.</p></div></div>{error && <div className="form-error" role="alert">{error}</div>}{exercises.length ? <div className="patient-exercise-grid">{exercises.map((item) => { const exercise = item.exercise; const key = `${exercise?._id}-${item.planId}`; const isComplete = completed.has(key); return <article className="patient-exercise-card" key={key}><div className="library-item-top"><span className="exercise-category">{item.planName}</span><span className={`completion-tag ${isComplete ? 'complete' : ''}`}>{isComplete ? 'Completed' : item.frequency}</span></div><h3>{exercise?.name || 'Exercise'}</h3><p>{exercise?.description}</p><div className="exercise-meta"><span>{exercise?.targetBodyPart}</span><span>{exercise?.duration} min</span><span>{exercise?.sets} × {exercise?.reps}</span></div><div className="instruction-box"><strong>Instructions</strong><p>{exercise?.instructions}</p>{exercise?.precautions && <small>Safety: {exercise.precautions}</small>}</div>{exercise?.videoUrl && <a className="resource-link" href={exercise.videoUrl} target="_blank" rel="noreferrer">Watch exercise video</a>}{!isComplete && (completing === key ? <div className="completion-form"><label>Pain level (0-10)<input type="number" min="0" max="10" value={pain} onChange={(event) => setPain(event.target.value)} /></label><label>Mobility score (0-100)<input type="number" min="0" max="100" value={mobilityScore} onChange={(event) => setMobilityScore(event.target.value)} /></label><label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="How did it feel?" /></label><div className="form-actions"><button type="button" className="primary-btn" onClick={() => completeExercise(exercise._id, item.planId)}>Mark completed</button><button type="button" className="secondary-btn" onClick={() => setCompleting('')}>Cancel</button></div></div> : <button type="button" className="primary-btn completion-button" onClick={() => setCompleting(key)}>Mark as completed</button>)}</article> })}</div> : <div className="dashboard-panel"><p className="empty-state">Your therapist has not assigned any exercises yet.</p></div>}</div></main>
+}
+
+function ProgressChart({ data, dataKey, color, max = 100, emptyLabel }) {
+  if (!data.length) return <div className="chart-empty">{emptyLabel}</div>
+  const width = 640
+  const height = 210
+  const points = data.map((item, index) => {
+    const x = data.length === 1 ? width / 2 : (index / (data.length - 1)) * width
+    const value = item[dataKey] === null || item[dataKey] === undefined ? 0 : item[dataKey]
+    const y = height - (Math.min(max, value) / max) * height
+    return `${x},${y}`
+  }).join(' ')
+  return <div className="progress-chart"><svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${dataKey} over time`} preserveAspectRatio="none"><line x1="0" y1="0" x2={width} y2="0" /><line x1="0" y1={height / 2} x2={width} y2={height / 2} /><line x1="0" y1={height} x2={width} y2={height} /><polyline points={points} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /></svg><div className="chart-labels"><span>{formatDate(data[0].date)}</span><span>{formatDate(data[data.length - 1].date)}</span></div></div>
+}
+
+function ProgressMetric({ label, value, suffix = '' }) {
+  return <div className="progress-metric"><span>{label}</span><strong>{value === null || value === undefined ? '--' : `${value}${suffix}`}</strong></div>
+}
+
+function PatientProgressPage() {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState('')
+  useEffect(() => { apiRequest('/progress/me').then(setData).catch((loadError) => setError(loadError.message)) }, [])
+  if (error) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
+  if (!data) return <LoadingDashboard />
+  const { summary, timeline, entries } = data
+  return <main className="page-shell progress-page"><div className="container management-wrap"><div className="management-heading"><span className="eyebrow accent">Your recovery data</span><h2>Progress tracking</h2><p>See how your exercise routine, pain, mobility, and attendance are changing over time.</p></div><div className="progress-metrics"><ProgressMetric label="Exercise adherence" value={summary.exerciseAdherence} suffix="%" /><ProgressMetric label="Completed sessions" value={summary.completedSessions} /><ProgressMetric label="Mobility score" value={summary.mobilityScore} suffix="/100" /><ProgressMetric label="Appointment attendance" value={summary.appointmentAttendance} suffix="%" /><ProgressMetric label="Average pain" value={summary.averagePain} suffix="/10" /></div><div className="progress-chart-grid"><section className="management-panel chart-panel"><div className="panel-heading"><div><span className="card-eyebrow">Consistency</span><h3>Exercise completion</h3></div></div><ProgressChart data={timeline} dataKey="completionRate" color="#0d8b85" emptyLabel="Complete an exercise to begin your timeline." /></section><section className="management-panel chart-panel"><div className="panel-heading"><div><span className="card-eyebrow">Movement signal</span><h3>Mobility score</h3></div></div><ProgressChart data={timeline.filter((item) => item.mobilityScore !== null)} dataKey="mobilityScore" color="#2b77d1" emptyLabel="Add a mobility score when completing an exercise." /></section><section className="management-panel chart-panel"><div className="panel-heading"><div><span className="card-eyebrow">Comfort signal</span><h3>Pain level</h3></div></div><ProgressChart data={timeline.filter((item) => item.pain !== null)} dataKey="pain" color="#e28a3d" max={10} emptyLabel="Add a pain level when completing an exercise." /></section></div><section className="management-panel"><div className="panel-heading"><div><span className="card-eyebrow">Session history</span><h3>Recent sessions</h3></div></div>{entries.length ? <div className="progress-table">{entries.slice().reverse().slice(0, 12).map((entry) => <div className="progress-table-row" key={entry._id}><span>{formatDate(entry.datePerformed)}</span><strong>{entry.exercise?.name || 'Exercise'}</strong><span className="completion-tag complete">{entry.completionStatus}</span><span>{entry.mobilityScore === undefined ? '--' : `${entry.mobilityScore}/100`} mobility</span><span>{entry.painLevel === undefined ? '--' : `${entry.painLevel}/10`} pain</span></div>)}</div> : <p className="empty-state">No progress sessions recorded yet.</p>}</section></div></main>
+}
+
+function TherapistProgressPage() {
+  const [patients, setPatients] = useState(null)
+  const [selectedId, setSelectedId] = useState('')
+  const [detail, setDetail] = useState(null)
+  const [error, setError] = useState('')
+  useEffect(() => { apiRequest('/progress/patients').then((data) => { setPatients(data); if (data[0]) setSelectedId(data[0].patient._id) }).catch((loadError) => setError(loadError.message)) }, [])
+  useEffect(() => { if (selectedId) apiRequest(`/progress/patients/${selectedId}`).then(setDetail).catch((loadError) => setError(loadError.message)) }, [selectedId])
+  if (error && !patients) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
+  if (!patients) return <LoadingDashboard />
+  return <main className="page-shell"><div className="container management-wrap"><div className="management-heading"><span className="eyebrow accent">Therapist workspace</span><h2>Patient progress</h2><p>Review adherence, session signals, and attendance for your assigned patients.</p></div>{error && <div className="form-error" role="alert">{error}</div>}<div className="therapist-progress-layout"><section className="management-panel patient-progress-list"><h3>Assigned patients</h3>{patients.length ? patients.map((item) => <button type="button" className={`patient-progress-option ${selectedId === item.patient._id ? 'selected' : ''}`} key={item.patient._id} onClick={() => setSelectedId(item.patient._id)}><span className="therapist-initial">{item.patient.user?.name?.charAt(0)}</span><span><strong>{item.patient.user?.name}</strong><small>{item.summary.exerciseAdherence}% adherence · {item.summary.completedSessions} sessions</small></span></button>) : <p className="empty-state">No assigned patients found.</p>}</section>{detail ? <section className="patient-progress-detail"><div className="progress-detail-heading"><div><span className="eyebrow accent">Patient record</span><h3>{detail.patient.user?.name}</h3><p>{detail.patient.medicalCondition}</p></div></div><div className="progress-metrics"><ProgressMetric label="Adherence" value={detail.summary.exerciseAdherence} suffix="%" /><ProgressMetric label="Completed" value={detail.summary.completedSessions} /><ProgressMetric label="Mobility" value={detail.summary.mobilityScore} suffix="/100" /><ProgressMetric label="Attendance" value={detail.summary.appointmentAttendance} suffix="%" /></div><div className="progress-chart-grid"><section className="management-panel chart-panel"><h3>Completion trend</h3><ProgressChart data={detail.timeline} dataKey="completionRate" color="#0d8b85" emptyLabel="No completion data yet." /></section><section className="management-panel chart-panel"><h3>Mobility trend</h3><ProgressChart data={detail.timeline.filter((item) => item.mobilityScore !== null)} dataKey="mobilityScore" color="#2b77d1" emptyLabel="No mobility data yet." /></section></div></section> : <div className="management-panel"><p className="empty-state">Select a patient to view progress.</p></div>}</div></div></main>
 }
 
 function AppointmentStatus({ status }) {
@@ -955,6 +997,8 @@ function App() {
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/my-exercises" element={<PatientExercisesPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/therapist-appointments" element={<TherapistAppointmentsPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/appointments" element={<PatientAppointmentsPage />} /></Route>
+            <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/patient-progress" element={<TherapistProgressPage />} /></Route>
+            <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/progress" element={<PatientProgressPage />} /></Route>
             <Route path="/consultation/:id" element={<ConsultationPage user={user} />} />
           </Route>
 

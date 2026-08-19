@@ -40,6 +40,11 @@ const progressSchema = new mongoose.Schema(
       min: [0, 'Pain level must be between 0 and 10'],
       max: [10, 'Pain level must be between 0 and 10'],
     },
+    mobilityScore: {
+      type: Number,
+      min: [0, 'Mobility score must be between 0 and 100'],
+      max: [100, 'Mobility score must be between 0 and 100'],
+    },
     difficulty: {
       type: String,
       enum: ['Easy', 'Medium', 'Hard'],

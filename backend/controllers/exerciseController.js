@@ -148,7 +148,7 @@ export const getPatientExercises = async (req, res) => {
 
 export const completePatientExercise = async (req, res) => {
   try {
-    const { planId, painLevel, notes } = req.body;
+    const { planId, painLevel, mobilityScore, notes } = req.body;
     const patient = await Patient.findOne({ user: req.user._id });
     const plan = await ExercisePlan.findOne({ _id: planId, patient: patient?._id, status: { $in: ['Active', 'Paused'] } });
     if (!plan || !plan.exercises.some((item) => String(item.exercise) === req.params.exerciseId)) {
@@ -161,6 +161,7 @@ export const completePatientExercise = async (req, res) => {
       exercisePlan: plan._id,
       completionStatus: 'Completed',
       painLevel: painLevel === '' || painLevel === undefined ? undefined : Number(painLevel),
+      mobilityScore: mobilityScore === '' || mobilityScore === undefined ? undefined : Number(mobilityScore),
       notes,
     });
     res.status(201).json(progress);
