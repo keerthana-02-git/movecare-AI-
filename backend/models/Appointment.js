@@ -26,7 +26,7 @@ const appointmentSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['Scheduled', 'InProgress', 'Completed', 'Cancelled', 'NoShow'],
+      enum: ['Scheduled', 'Accepted', 'InProgress', 'Completed', 'Cancelled', 'NoShow'],
       default: 'Scheduled',
     },
     type: {
@@ -45,6 +45,21 @@ const appointmentSchema = new mongoose.Schema(
     location: {
       type: String,
       trim: true,
+    },
+    consultationMode: {
+      type: String,
+      enum: ['Virtual', 'InPerson'],
+      default: 'Virtual',
+    },
+    consultationStatus: {
+      type: String,
+      enum: ['Waiting', 'Live', 'Ended'],
+      default: 'Waiting',
+    },
+    cancellationDeadlineHours: {
+      type: Number,
+      default: 24,
+      min: 0,
     },
   },
   {

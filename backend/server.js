@@ -7,6 +7,7 @@ import connectDB from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import patientRoutes from './routes/patientRoutes.js';
 import exerciseRoutes from './routes/exerciseRoutes.js';
+import appointmentRoutes from './routes/appointmentRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,6 +26,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/exercises', exerciseRoutes);
+app.use('/api/appointments', appointmentRoutes);
 
 const startServer = async (port = PORT) => {
   await connectDB();

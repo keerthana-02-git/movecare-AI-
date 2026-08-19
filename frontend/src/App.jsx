@@ -6,6 +6,7 @@ import {
   Outlet,
   Route,
   Routes,
+  useParams,
   useNavigate,
 } from 'react-router-dom'
 import './App.css'
@@ -136,6 +137,8 @@ function Navbar({ user, onLogout }) {
               </NavLink>
               {user.role === 'Therapist' && <NavLink to="/exercise-management" className="secondary-btn small">Exercises</NavLink>}
               {user.role === 'Patient' && <NavLink to="/my-exercises" className="secondary-btn small">My exercises</NavLink>}
+              {user.role === 'Therapist' && <NavLink to="/therapist-appointments" className="secondary-btn small">Appointments</NavLink>}
+              {user.role === 'Patient' && <NavLink to="/appointments" className="secondary-btn small">Appointments</NavLink>}
               <button type="button" className="primary-btn small" onClick={handleLogout}>
                 Logout
               </button>
@@ -843,6 +846,75 @@ function PatientExercisesPage() {
   return <main className="page-shell"><div className="container management-wrap"><div className="management-heading"><div><span className="eyebrow accent">Your movement plan</span><h2>Assigned exercises</h2><p>Follow each instruction at your own pace and record the session when you finish.</p></div></div>{error && <div className="form-error" role="alert">{error}</div>}{exercises.length ? <div className="patient-exercise-grid">{exercises.map((item) => { const exercise = item.exercise; const key = `${exercise?._id}-${item.planId}`; const isComplete = completed.has(key); return <article className="patient-exercise-card" key={key}><div className="library-item-top"><span className="exercise-category">{item.planName}</span><span className={`completion-tag ${isComplete ? 'complete' : ''}`}>{isComplete ? 'Completed' : item.frequency}</span></div><h3>{exercise?.name || 'Exercise'}</h3><p>{exercise?.description}</p><div className="exercise-meta"><span>{exercise?.targetBodyPart}</span><span>{exercise?.duration} min</span><span>{exercise?.sets} × {exercise?.reps}</span></div><div className="instruction-box"><strong>Instructions</strong><p>{exercise?.instructions}</p>{exercise?.precautions && <small>Safety: {exercise.precautions}</small>}</div>{exercise?.videoUrl && <a className="resource-link" href={exercise.videoUrl} target="_blank" rel="noreferrer">Watch exercise video</a>}{!isComplete && (completing === key ? <div className="completion-form"><label>Pain level (0-10)<input type="number" min="0" max="10" value={pain} onChange={(event) => setPain(event.target.value)} /></label><label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="How did it feel?" /></label><div className="form-actions"><button type="button" className="primary-btn" onClick={() => completeExercise(exercise._id, item.planId)}>Mark completed</button><button type="button" className="secondary-btn" onClick={() => setCompleting('')}>Cancel</button></div></div> : <button type="button" className="primary-btn completion-button" onClick={() => setCompleting(key)}>Mark as completed</button>)}</article> })}</div> : <div className="dashboard-panel"><p className="empty-state">Your therapist has not assigned any exercises yet.</p></div>}</div></main>
 }
 
+function AppointmentStatus({ status }) {
+  return <span className={`appointment-status ${status.toLowerCase()}`}>{status}</span>
+}
+
+function ConsultationLink({ appointment }) {
+  if (!['Scheduled', 'Accepted', 'InProgress'].includes(appointment.status)) return null
+  return <NavLink className="secondary-btn small" to={`/consultation/${appointment._id}`}>Open consultation</NavLink>
+}
+
+function PatientAppointmentsPage() {
+  const [therapists, setTherapists] = useState([])
+  const [appointments, setAppointments] = useState([])
+  const [therapistId, setTherapistId] = useState('')
+  const [date, setDate] = useState('')
+  const [slots, setSlots] = useState([])
+  const [booking, setBooking] = useState({ startTime: '', endTime: '', type: 'Treatment Session', notes: '' })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  const loadAppointments = async () => setAppointments(await apiRequest('/appointments/patient'))
+  useEffect(() => {
+    const load = async () => {
+      try { setLoading(true); const [therapistData, appointmentData] = await Promise.all([apiRequest('/appointments/therapists'), apiRequest('/appointments/patient')]); setTherapists(therapistData); setAppointments(appointmentData) } catch (loadError) { setError(loadError.message) } finally { setLoading(false) }
+    }
+    load()
+  }, [])
+  useEffect(() => {
+    if (!therapistId || !date) { setSlots([]); return }
+    apiRequest(`/appointments/therapists/${therapistId}/slots?date=${date}`).then(setSlots).catch((slotError) => setError(slotError.message))
+  }, [therapistId, date])
+
+  const book = async (event) => {
+    event.preventDefault()
+    try { setSaving(true); setError(''); setNotice(''); await apiRequest('/appointments', { method: 'POST', body: JSON.stringify({ therapistId, date, ...booking }) }); await loadAppointments(); setBooking({ startTime: '', endTime: '', type: 'Treatment Session', notes: '' }); setSlots([]); setNotice('Your virtual consultation is booked.') } catch (bookError) { setError(bookError.message) } finally { setSaving(false) }
+  }
+  const cancel = async (appointment) => {
+    if (!window.confirm('Cancel this appointment?')) return
+    try { await apiRequest(`/appointments/${appointment._id}/cancel`, { method: 'PATCH', body: JSON.stringify({}) }); await loadAppointments(); setNotice('Appointment cancelled.') } catch (cancelError) { setError(cancelError.message) }
+  }
+
+  return <main className="page-shell"><div className="container management-wrap"><div className="management-heading"><span className="eyebrow accent">Virtual care</span><h2>Appointments</h2><p>Choose a therapist and a time that works for your recovery.</p></div>{error && <div className="form-error" role="alert">{error}</div>}{notice && <div className="success-message" role="status">{notice}</div>}<div className="appointment-layout"><section className="management-panel"><h3>Book a consultation</h3><form className="appointment-form" onSubmit={book}><label>Therapist<select value={therapistId} onChange={(event) => { setTherapistId(event.target.value); setBooking({ ...booking, startTime: '', endTime: '' }) }} required><option value="">Select therapist</option>{therapists.map((therapist) => <option key={therapist._id} value={therapist._id}>{therapist.user?.name} · {therapist.specialization}</option>)}</select></label><label>Date<input type="date" min={new Date().toISOString().slice(0, 10)} value={date} onChange={(event) => { setDate(event.target.value); setBooking({ ...booking, startTime: '', endTime: '' }) }} required /></label><label>Available time<select value={booking.startTime} onChange={(event) => { const slot = slots.find((item) => item.startTime === event.target.value); setBooking({ ...booking, startTime: slot?.startTime || '', endTime: slot?.endTime || '' }) }} required><option value="">{slots.length ? 'Select a slot' : 'Choose therapist and date first'}</option>{slots.map((slot) => <option key={slot.startTime} value={slot.startTime}>{slot.startTime} - {slot.endTime}</option>)}</select></label><label>Visit type<select value={booking.type} onChange={(event) => setBooking({ ...booking, type: event.target.value })}><option>Initial Assessment</option><option>Follow-up</option><option>Progress Review</option><option>Treatment Session</option></select></label><label>Notes<textarea value={booking.notes} onChange={(event) => setBooking({ ...booking, notes: event.target.value })} placeholder="What would you like to discuss?" /></label><button className="primary-btn" disabled={saving}>{saving ? 'Booking...' : 'Book virtual consultation'}</button></form></section><section className="management-panel therapist-profile-panel"><h3>Available therapists</h3>{therapists.length ? therapists.map((therapist) => <div className="therapist-option" key={therapist._id}><div className="therapist-initial">{therapist.user?.name?.charAt(0)}</div><div><strong>{therapist.user?.name}</strong><span>{therapist.specialization}</span><small>{therapist.yearsOfExperience} years experience</small></div></div>) : <p className="empty-state">No therapists are available right now.</p>}</section></div><section className="management-panel appointment-list-panel"><div className="panel-heading"><div><span className="card-eyebrow">Your schedule</span><h3>Upcoming and past appointments</h3></div></div>{loading ? <div className="dashboard-loading">Loading appointments...</div> : appointments.length ? <div className="appointment-list">{appointments.map((appointment) => <article className="appointment-row" key={appointment._id}><div className="appointment-date"><strong>{formatDate(appointment.appointmentDate)}</strong><span>{appointment.startTime} - {appointment.endTime}</span></div><div className="appointment-main"><strong>{appointment.therapist?.user?.name}</strong><span>{appointment.type} · {appointment.consultationMode}</span><small>{appointment.location}</small></div><AppointmentStatus status={appointment.status} /><div className="appointment-actions"><ConsultationLink appointment={appointment}/>{['Scheduled', 'Accepted'].includes(appointment.status) && <button className="danger-btn" type="button" onClick={() => cancel(appointment)}>Cancel</button>}</div></article>)}</div> : <p className="empty-state">No appointments yet. Book your first consultation above.</p>}</section></div></main>
+}
+
+function TherapistAppointmentsPage() {
+  const [appointments, setAppointments] = useState(null)
+  const [error, setError] = useState('')
+  const load = async () => { try { setAppointments(await apiRequest('/appointments/therapist')) } catch (loadError) { setError(loadError.message) } }
+  useEffect(() => { load() }, [])
+  const manage = async (appointment, status) => { try { await apiRequest(`/appointments/${appointment._id}/manage`, { method: 'PATCH', body: JSON.stringify({ status }) }); await load() } catch (manageError) { setError(manageError.message) } }
+  if (error && !appointments) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
+  if (!appointments) return <LoadingDashboard />
+  return <main className="page-shell"><div className="container management-wrap"><div className="management-heading"><span className="eyebrow accent">Therapist workspace</span><h2>Appointment schedule</h2><p>Confirm visits, manage the day, and open the consultation room when it is time.</p></div>{error && <div className="form-error" role="alert">{error}</div>}<section className="management-panel appointment-list-panel"><div className="appointment-list">{appointments.length ? appointments.map((appointment) => <article className="appointment-row" key={appointment._id}><div className="appointment-date"><strong>{formatDate(appointment.appointmentDate)}</strong><span>{appointment.startTime} - {appointment.endTime}</span></div><div className="appointment-main"><strong>{appointment.patient?.user?.name}</strong><span>{appointment.patient?.medicalCondition}</span><small>{appointment.type} · {appointment.consultationMode}</small></div><AppointmentStatus status={appointment.status}/><div className="appointment-actions">{appointment.status === 'Scheduled' && <button className="primary-btn small" type="button" onClick={() => manage(appointment, 'Accepted')}>Accept</button>}{appointment.status === 'Accepted' && <button className="primary-btn small" type="button" onClick={() => manage(appointment, 'InProgress')}>Start</button>}<ConsultationLink appointment={appointment}/>{['Scheduled', 'Accepted'].includes(appointment.status) && <button className="danger-btn" type="button" onClick={() => manage(appointment, 'Cancelled')}>Decline</button>}</div></article>) : <p className="empty-state">No appointments are scheduled.</p>}</div></section></div></main>
+}
+
+function ConsultationPage({ user }) {
+  const { id } = useParams()
+  const [appointment, setAppointment] = useState(null)
+  const [error, setError] = useState('')
+  const [mutating, setMutating] = useState(false)
+  useEffect(() => { apiRequest(`/appointments/${id}/consultation`).then(setAppointment).catch((loadError) => setError(loadError.message)) }, [id])
+  const updateStatus = async (consultationStatus) => { try { setMutating(true); const updated = await apiRequest(`/appointments/${id}/consultation`, { method: 'PATCH', body: JSON.stringify({ consultationStatus }) }); setAppointment((current) => ({ ...current, ...updated })) } catch (statusError) { setError(statusError.message) } finally { setMutating(false) } }
+  if (error) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
+  if (!appointment) return <LoadingDashboard />
+  const otherPerson = user.role === 'Therapist' ? appointment.patient?.user?.name : appointment.therapist?.user?.name
+  return <main className="page-shell consultation-page"><div className="container consultation-wrap"><NavLink className="back-link" to={user.role === 'Therapist' ? '/therapist-appointments' : '/appointments'}>Back to appointments</NavLink><div className="consultation-header"><div><span className="eyebrow accent">MoveCare virtual clinic</span><h2>Consultation room</h2><p>{formatDate(appointment.appointmentDate)} · {appointment.startTime} - {appointment.endTime} · with {otherPerson}</p></div><AppointmentStatus status={appointment.consultationStatus}/></div><section className="consultation-stage"><div className="video-placeholder"><div className="video-avatar">{otherPerson?.charAt(0)}</div><strong>{otherPerson}</strong><span>{appointment.consultationStatus === 'Live' ? 'Live consultation' : 'Your secure consultation space'}</span><div className="video-controls"><button type="button" className="secondary-btn small">Mute</button><button type="button" className="secondary-btn small">Camera</button>{user.role === 'Therapist' && appointment.consultationStatus !== 'Ended' && <button type="button" className="primary-btn small" disabled={mutating} onClick={() => updateStatus(appointment.consultationStatus === 'Live' ? 'Ended' : 'Live')}>{appointment.consultationStatus === 'Live' ? 'End consultation' : 'Start consultation'}</button>}</div></div><aside className="consultation-sidebar"><h3>Visit details</h3><dl className="profile-list"><div><dt>Type</dt><dd>{appointment.type}</dd></div><div><dt>Mode</dt><dd>{appointment.consultationMode}</dd></div><div><dt>Status</dt><dd>{appointment.status}</dd></div></dl><div className="consultation-note"><strong>Demo consultation</strong><p>This professional room demonstrates the visit flow. Camera and microphone controls are visual placeholders for a future video provider.</p></div></aside></section></div></main>
+}
+
 function App() {
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem('movecare-user')
@@ -881,6 +953,9 @@ function App() {
             <Route path="/dashboard" element={user.role === 'Patient' ? <PatientDashboardPage user={user} /> : <DashboardPage user={user} />} />
             <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/exercise-management" element={<ExerciseManagementPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/my-exercises" element={<PatientExercisesPage />} /></Route>
+            <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/therapist-appointments" element={<TherapistAppointmentsPage />} /></Route>
+            <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/appointments" element={<PatientAppointmentsPage />} /></Route>
+            <Route path="/consultation/:id" element={<ConsultationPage user={user} />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

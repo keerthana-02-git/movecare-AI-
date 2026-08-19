@@ -579,6 +579,44 @@
 .instruction-box small { color: #96600c; }
 .resource-link { display: inline-block; margin-bottom: 1rem; color: #0d5ea8; font-size: 0.85rem; font-weight: 700; }
 .completion-button { width: 100%; }
+.appointment-layout { display: grid; grid-template-columns: 1fr 0.8fr; gap: 1rem; margin-bottom: 1rem; }
+.appointment-form { display: grid; gap: 0.9rem; }
+.appointment-form label { display: grid; gap: 0.35rem; color: #1a3559; font-size: 0.85rem; font-weight: 700; }
+.appointment-form input, .appointment-form select, .appointment-form textarea { width: 100%; border: 1px solid #d6e4f1; border-radius: 0.65rem; padding: 0.75rem 0.8rem; color: #172b46; background: #f7fbff; font: inherit; }
+.appointment-form textarea { min-height: 5rem; resize: vertical; }
+.therapist-option { display: flex; align-items: center; gap: 0.8rem; border-bottom: 1px solid #edf1f4; padding: 0.8rem 0; }
+.therapist-option:last-child { border-bottom: 0; }
+.therapist-initial { width: 2.5rem; height: 2.5rem; display: grid; flex: 0 0 2.5rem; place-items: center; border-radius: 50%; background: #e6f3f2; color: #0d8b85; font-weight: 800; }
+.therapist-option div:last-child { display: grid; gap: 0.18rem; }
+.therapist-option strong { color: #163653; }
+.therapist-option span, .therapist-option small { color: #74899d; font-size: 0.8rem; }
+.appointment-list { display: grid; gap: 0.8rem; }
+.appointment-row { display: grid; grid-template-columns: 10rem 1fr auto auto; align-items: center; gap: 1rem; border-bottom: 1px solid #edf1f4; padding: 0.9rem 0; }
+.appointment-row:last-child { border-bottom: 0; }
+.appointment-date, .appointment-main { display: grid; gap: 0.25rem; }
+.appointment-date strong, .appointment-main strong { color: #163653; }
+.appointment-date span, .appointment-main span, .appointment-main small { color: #74899d; font-size: 0.8rem; }
+.appointment-status { border-radius: 999px; padding: 0.35rem 0.6rem; background: #edf5fd; color: #0d5ea8; font-size: 0.72rem; font-weight: 800; white-space: nowrap; }
+.appointment-status.accepted { background: rgba(24, 161, 132, 0.12); color: #137d5d; }
+.appointment-status.inprogress, .appointment-status.live { background: rgba(239, 155, 69, 0.16); color: #96600c; }
+.appointment-status.cancelled, .appointment-status.ended { background: rgba(220, 53, 69, 0.08); color: #b42318; }
+.appointment-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.55rem; }
+.consultation-page { background: radial-gradient(circle at 78% 0%, rgba(49, 184, 170, 0.13), transparent 30rem); }
+.consultation-wrap { max-width: 1100px; }
+.back-link { display: inline-block; margin-bottom: 1.5rem; color: #0d5ea8; font-size: 0.85rem; font-weight: 700; text-decoration: none; }
+.consultation-header { display: flex; align-items: end; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
+.consultation-header h2 { margin: 0 0 0.45rem; color: #142d48; }
+.consultation-header p { margin: 0; color: #526d84; }
+.consultation-stage { display: grid; grid-template-columns: 1fr 18rem; gap: 1rem; }
+.video-placeholder { min-height: 31rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.65rem; border-radius: 1rem; background: linear-gradient(145deg, #163653, #0e6670); color: #fff; box-shadow: 0 24px 40px rgba(12, 37, 58, 0.18); }
+.video-avatar { width: 6rem; height: 6rem; display: grid; place-items: center; border: 4px solid rgba(255, 255, 255, 0.55); border-radius: 50%; background: #f0b45b; font-size: 2.4rem; font-weight: 800; }
+.video-placeholder > span { color: rgba(255, 255, 255, 0.72); font-size: 0.85rem; }
+.video-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem; margin-top: 1.2rem; }
+.consultation-sidebar { align-self: start; background: #fff; border: 1px solid rgba(19, 92, 151, 0.1); border-radius: 1rem; padding: 1.25rem; }
+.consultation-sidebar h3 { margin: 0 0 1rem; color: #163653; }
+.consultation-note { margin-top: 1.5rem; border-left: 3px solid #19a59d; padding: 0.8rem; background: #f1faf9; }
+.consultation-note strong { color: #163653; font-size: 0.85rem; }
+.consultation-note p { margin: 0.4rem 0 0; color: #526d84; font-size: 0.8rem; line-height: 1.5; }
 
 @media (max-width: 820px) {
   .nav-wrap,
@@ -600,6 +638,10 @@
   .dashboard-hero { align-items: flex-start; }
   .management-layout, .exercise-library-grid, .patient-exercise-grid { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr; }
+  .appointment-layout, .consultation-stage { grid-template-columns: 1fr; }
+  .appointment-row { grid-template-columns: 1fr; align-items: start; }
+  .appointment-actions { justify-content: flex-start; }
+  .consultation-header { align-items: flex-start; flex-direction: column; }
 
   .nav-wrap {
     padding: 1rem 0;
