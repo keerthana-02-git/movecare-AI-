@@ -5,6 +5,7 @@ import {
   Progress,
   Therapist,
 } from '../models/index.js';
+import { createNotification } from './notificationController.js';
 
 const getTherapist = (userId) => Therapist.findOne({ user: userId });
 
@@ -124,6 +125,14 @@ export const assignExercise = async (req, res) => {
       status: 'Active',
     });
 
+    await createNotification({
+      recipient: patient.user,
+      type: 'NewExercisePlan',
+      title: 'New exercise plan assigned',
+      message: `${exercise.name} was added to your ${planName} plan.`,
+      relatedEntity: { entityType: 'ExercisePlan', entityId: plan._id },
+    });
+
     res.status(201).json(await plan.populate('exercises.exercise'));
   } catch (error) {
     res.status(400).json({ message: error.message || 'Unable to assign exercise' });
@@ -164,6 +173,16 @@ export const completePatientExercise = async (req, res) => {
       mobilityScore: mobilityScore === '' || mobilityScore === undefined ? undefined : Number(mobilityScore),
       notes,
     });
+    const therapist = await ExercisePlan.findById(plan._id).populate({ path: 'therapist', select: 'user' });
+    if (therapist?.therapist?.user) {
+      await createNotification({
+        recipient: therapist.therapist.user,
+        type: 'ProgressUpdate',
+        title: 'Exercise completed',
+        message: 'A patient completed an assigned exercise and recorded a new progress update.',
+        relatedEntity: { entityType: 'ExercisePlan', entityId: plan._id },
+      });
+    }
     res.status(201).json(progress);
   } catch (error) {
     res.status(400).json({ message: error.message || 'Unable to mark exercise complete' });

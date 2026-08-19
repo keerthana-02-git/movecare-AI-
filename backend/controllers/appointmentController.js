@@ -1,4 +1,5 @@
 import { Appointment, Patient, Therapist } from '../models/index.js';
+import { createNotification } from './notificationController.js';
 
 const slotMinutes = 45;
 
@@ -106,6 +107,14 @@ export const bookAppointment = async (req, res) => {
       consultationMode: 'Virtual',
       location: 'MoveCare virtual clinic',
     });
+    const therapistUser = await Therapist.findById(therapist._id).select('user');
+    await createNotification({
+      recipient: therapistUser.user,
+      type: 'Appointment',
+      title: 'New appointment request',
+      message: 'A patient has requested a virtual consultation.',
+      relatedEntity: { entityType: 'Appointment', entityId: appointment._id },
+    });
     res.status(201).json(await appointment.populate([
       { path: 'therapist', populate: { path: 'user', select: 'name email' } },
     ]));
@@ -133,6 +142,14 @@ export const cancelPatientAppointment = async (req, res) => {
     const patient = await getPatient(req.user._id);
     const appointment = await Appointment.findOne({ _id: req.params.id, patient: patient?._id });
     if (!appointment) return res.status(404).json({ message: 'Appointment not found' });
+    const patientUser = await Patient.findById(appointment.patient).select('user');
+    await createNotification({
+      recipient: patientUser.user,
+      type: status === 'Cancelled' ? 'Appointment' : 'Appointment',
+      title: status === 'Accepted' ? 'Appointment accepted' : status === 'Cancelled' ? 'Appointment cancelled' : 'Appointment updated',
+      message: status === 'Accepted' ? 'Your therapist accepted the appointment request.' : `Your appointment status is now ${status}.`,
+      relatedEntity: { entityType: 'Appointment', entityId: appointment._id },
+    });
     if (['Cancelled', 'Completed', 'NoShow'].includes(appointment.status)) {
       return res.status(400).json({ message: 'This appointment cannot be cancelled' });
     }

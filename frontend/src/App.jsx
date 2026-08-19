@@ -144,6 +144,7 @@ function Navbar({ user, onLogout }) {
               {user.role === 'Patient' && <NavLink to="/ai-assistant" className="secondary-btn small">AI guide</NavLink>}
               {user.role === 'Therapist' && <NavLink to="/monitoring" className="secondary-btn small">Live monitor</NavLink>}
               {user.role === 'Patient' && <NavLink to="/monitoring" className="secondary-btn small">Live monitor</NavLink>}
+              <NavLink to="/notifications" className="secondary-btn small">Notifications</NavLink>
               <button type="button" className="primary-btn small" onClick={handleLogout}>
                 Logout
               </button>
@@ -616,6 +617,37 @@ function TherapistMonitoringPage() {
   return <main className="page-shell monitoring-page"><div className="container management-wrap"><div className="management-heading"><span className="eyebrow accent">Simulated demo data</span><h2>Live patient monitoring</h2><p>Monitor active exercise sessions from assigned patients. Updates refresh automatically every three seconds.</p></div>{error && <div className="form-error" role="alert">{error}</div>}{sessions.length ? <div className="live-session-grid">{sessions.map((session) => <article className="live-session-card" key={session._id}><div className="session-console-header"><div><span className="card-eyebrow">{session.patient?.user?.name}</span><h3>{session.exercise?.name}</h3></div><span className="session-status active">Live</span></div><div className="live-readings"><div><span>Elapsed</span><strong>{formatElapsed(session.elapsedSeconds)}</strong></div><div><span>Reps</span><strong>{session.currentReps}/{session.targetReps}</strong></div><div><span>Pain</span><strong>{session.painLevel ?? '--'}/10</strong></div><div><span>Mobility</span><strong>{session.mobilityScore ?? '--'}/100</strong></div></div><div className="session-progress"><span style={{ width: `${Math.min(100, (session.currentReps / session.targetReps) * 100)}%` }} /></div><small className="demo-label">Demo sensor · Updated {formatDate(session.updatedAt)}</small></article>)}</div> : <section className="management-panel"><p className="empty-state">No active patient sessions. This panel will update when a patient starts a demo session.</p></section>}</div></main>
 }
 
+function NotificationPreview() {
+  const [data, setData] = useState(null)
+  useEffect(() => { apiRequest('/notifications?limit=4').then(setData).catch(() => {}) }, [])
+  if (!data) return null
+  return <section className="notification-preview"><div><span className="card-eyebrow">Inbox</span><h3>{data.unreadCount ? `${data.unreadCount} unread notification${data.unreadCount === 1 ? '' : 's'}` : 'All caught up'}</h3><p>{data.notifications[0]?.title || 'No new updates yet.'}</p></div><NavLink className="secondary-btn small" to="/notifications">Open inbox</NavLink></section>
+}
+
+function notificationIcon(type) {
+  return ({ Appointment: 'AP', ExerciseReminder: 'EX', ProgressUpdate: 'PR', Message: 'MS', NewExercisePlan: 'PL' }[type] || 'IN')
+}
+
+function NotificationsPage({ user }) {
+  const [data, setData] = useState(null)
+  const [options, setOptions] = useState([])
+  const [title, setTitle] = useState('')
+  const [message, setMessage] = useState('')
+  const [notificationType, setNotificationType] = useState('Message')
+  const [patientId, setPatientId] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const load = async () => { try { const result = await apiRequest('/notifications?limit=50'); setData(result); setError('') } catch (loadError) { setError(loadError.message) } }
+  useEffect(() => { load(); if (user.role === 'Therapist') apiRequest('/exercises/assignment-options').then((result) => setOptions(result.patients)).catch(() => {}) }, [user.role])
+  const markRead = async (id) => { try { await apiRequest(`/notifications/${id}/read`, { method: 'PATCH' }); await load() } catch (readError) { setError(readError.message) } }
+  const markAllRead = async () => { try { await apiRequest('/notifications/read-all', { method: 'PATCH' }); await load() } catch (readError) { setError(readError.message) } }
+  const sendMessage = async (event) => { event.preventDefault(); try { setSending(true); await apiRequest('/notifications/messages', { method: 'POST', body: JSON.stringify({ patientId, title, message, type: notificationType }) }); setTitle(''); setMessage(''); setPatientId(''); setNotificationType('Message'); setNotice(notificationType === 'ExerciseReminder' ? 'Exercise reminder sent.' : 'Message sent.'); } catch (sendError) { setError(sendError.message) } finally { setSending(false) } }
+  if (error && !data) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
+  if (!data) return <LoadingDashboard />
+  return <main className="page-shell notifications-page"><div className="container management-wrap"><div className="management-heading"><span className="eyebrow accent">MoveCare inbox</span><h2>Notifications</h2><p>Keep track of exercise reminders, appointments, progress updates, and care-team messages.</p></div>{error && <div className="form-error" role="alert">{error}</div>}{notice && <div className="success-message" role="status">{notice}</div>}<div className="notifications-layout"><section className="management-panel"><div className="panel-heading"><div><span className="card-eyebrow">Your updates</span><h3>{data.unreadCount} unread</h3></div>{data.unreadCount > 0 && <button className="secondary-btn small" type="button" onClick={markAllRead}>Mark all read</button>}</div>{data.notifications.length ? <div className="inbox-list">{data.notifications.map((notification) => <article className={`inbox-item ${notification.isRead ? '' : 'unread'}`} key={notification._id}><div className="notification-icon">{notificationIcon(notification.type)}</div><div className="inbox-content"><div className="inbox-title"><strong>{notification.title}</strong><span>{notification.priority}</span></div><p>{notification.message}</p><small>{formatDate(notification.createdAt)} · {notification.type}</small></div>{!notification.isRead && <button type="button" className="read-btn" onClick={() => markRead(notification._id)}>Mark read</button>}</article>)}</div> : <p className="empty-state">No notifications yet.</p>}</section>{user.role === 'Therapist' && <section className="management-panel message-panel"><span className="card-eyebrow">Care team</span><h3>Send a patient update</h3><p>Send a simple update or exercise reminder that will appear in the patient&apos;s inbox.</p><form className="message-form" onSubmit={sendMessage}><label>Patient<select value={patientId} onChange={(event) => setPatientId(event.target.value)} required><option value="">Select patient</option>{options.map((patient) => <option value={patient._id} key={patient._id}>{patient.user?.name}</option>)}</select></label><label>Type<select value={notificationType} onChange={(event) => setNotificationType(event.target.value)}><option value="Message">Therapist message</option><option value="ExerciseReminder">Exercise reminder</option></select></label><label>Title<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Progress check-in" required /></label><label>Message<textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Write a short care update" required /></label><button className="primary-btn" disabled={sending}>{sending ? 'Sending...' : 'Send update'}</button></form></section>}</div></div></main>
+}
+
 function DashboardPage({ user }) {
   const roleContent = {
     Patient: {
@@ -657,6 +689,7 @@ function DashboardPage({ user }) {
           </ul>
         </div>
         {user.role === 'Therapist' && <LiveMonitoringCard role="Therapist" />}
+        {user.role !== 'Patient' && <NotificationPreview />}
       </div>
     </main>
   )
@@ -1112,6 +1145,7 @@ function App() {
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/progress" element={<PatientProgressPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/ai-assistant" element={<AssistantPage />} /></Route>
             <Route path="/monitoring" element={user.role === 'Patient' ? <PatientMonitoringPage /> : <TherapistMonitoringPage />} />
+            <Route path="/notifications" element={<NotificationsPage user={user} />} />
             <Route path="/consultation/:id" element={<ConsultationPage user={user} />} />
           </Route>
 

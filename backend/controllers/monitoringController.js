@@ -1,4 +1,5 @@
 import { ExercisePlan, MonitoringSession, Patient, Progress, Therapist } from '../models/index.js';
+import { createNotification } from './notificationController.js';
 
 const getPatient = (userId) => Patient.findOne({ user: userId });
 const getTherapist = (userId) => Therapist.findOne({ user: userId });
@@ -76,6 +77,16 @@ export const updatePatientSession = async (req, res) => {
         mobilityScore: session.mobilityScore,
         notes: 'Completed through simulated monitoring session',
       });
+      const plan = await ExercisePlan.findById(session.exercisePlan).populate({ path: 'therapist', select: 'user' });
+      if (plan?.therapist?.user) {
+        await createNotification({
+          recipient: plan.therapist.user,
+          type: 'ProgressUpdate',
+          title: 'Monitored session completed',
+          message: 'A patient completed a simulated exercise session with live pain and mobility readings.',
+          relatedEntity: { entityType: 'ExercisePlan', entityId: plan._id },
+        });
+      }
     }
     res.json(await populateSession(MonitoringSession.findById(session._id)));
   } catch (error) {
