@@ -499,6 +499,51 @@
   line-height: 1.8;
 }
 
+.dashboard-page { background: radial-gradient(circle at 82% 0%, rgba(49, 184, 170, 0.12), transparent 28rem); }
+.dashboard-hero { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 2rem; }
+.dashboard-hero h2 { margin: 0 0 0.5rem; color: #142d48; }
+.dashboard-hero p { margin: 0; color: #526d84; }
+.dashboard-avatar { width: 3.5rem; height: 3.5rem; display: grid; place-items: center; border-radius: 50%; background: #f0b45b; color: #fff; font-size: 1.4rem; font-weight: 800; }
+.dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.dashboard-card { background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(19, 92, 151, 0.1); border-radius: 1rem; padding: 1.35rem; box-shadow: 0 20px 28px rgba(12, 37, 58, 0.05); }
+.dashboard-card-heading { margin-bottom: 1.2rem; }
+.dashboard-card h3 { margin: 0; color: #163653; font-size: 1.15rem; }
+.card-eyebrow { display: block; margin-bottom: 0.35rem; color: #0d8b85; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.progress-summary { display: flex; align-items: baseline; gap: 0.65rem; }
+.progress-summary strong, .signal-value { color: #0d5ea8; font-size: 2.5rem; line-height: 1; }
+.progress-summary span, .signal-label { color: #526d84; font-size: 0.9rem; }
+.progress-track { height: 0.7rem; margin: 1.2rem 0; overflow: hidden; border-radius: 1rem; background: #e7eef4; }
+.progress-track span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #13a59d, #2b77d1); }
+.stat-row { display: flex; justify-content: space-between; gap: 1rem; color: #526d84; font-size: 0.85rem; }
+.stat-row strong { color: #163653; }
+.signal-label { margin: 0.45rem 0 1rem; }
+.status-pill.warning { background: rgba(221, 146, 40, 0.16); color: #96600c; }
+.appointment-detail, .profile-list { display: grid; gap: 0.55rem; color: #526d84; }
+.appointment-detail strong { color: #163653; font-size: 1.2rem; }
+.appointment-detail small { color: #74899d; }
+.profile-list { margin: 0; }
+.profile-list div { display: flex; justify-content: space-between; gap: 1rem; border-bottom: 1px solid #edf1f4; padding-bottom: 0.55rem; }
+.profile-list div:last-child { border-bottom: 0; }
+.profile-list dt { color: #74899d; }
+.profile-list dd { margin: 0; color: #163653; font-weight: 700; text-align: right; }
+.exercise-card { grid-row: span 2; }
+.exercise-list, .notification-list { display: grid; gap: 0.8rem; }
+.exercise-row, .notification-row { display: flex; align-items: center; gap: 0.75rem; border-bottom: 1px solid #edf1f4; padding-bottom: 0.8rem; }
+.exercise-row:last-child, .notification-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.exercise-check { width: 1.5rem; height: 1.5rem; flex: 0 0 1.5rem; border: 1px solid #bdd0df; border-radius: 50%; }
+.exercise-check.complete { display: grid; place-items: center; border-color: #18a184; background: #18a184; color: #fff; font-size: 0.8rem; }
+.exercise-row div, .notification-row div { display: grid; gap: 0.2rem; flex: 1; }
+.exercise-row strong, .notification-row strong { color: #163653; font-size: 0.9rem; }
+.exercise-row span, .exercise-row small { color: #74899d; font-size: 0.78rem; }
+.notification-row { align-items: flex-start; }
+.notification-row p { margin: 0; color: #526d84; font-size: 0.82rem; line-height: 1.45; }
+.notification-dot { width: 0.55rem; height: 0.55rem; flex: 0 0 0.55rem; margin-top: 0.25rem; border-radius: 50%; background: #d6e1e9; }
+.notification-row.unread .notification-dot { background: #ef9b45; }
+.empty-state { margin: 0; color: #74899d; }
+.dashboard-loading, .dashboard-error { padding: 2rem; border-radius: 1rem; background: #fff; border: 1px solid #e1eaf0; color: #526d84; }
+.dashboard-error strong { color: #b42318; }
+.dashboard-error p { margin: 0.5rem 0 0; }
+
 @media (max-width: 820px) {
   .nav-wrap,
   .cta-row,
@@ -513,6 +558,10 @@
     grid-template-columns: 1fr;
     display: grid;
   }
+
+  .dashboard-grid { grid-template-columns: 1fr; }
+  .exercise-card { grid-row: auto; }
+  .dashboard-hero { align-items: flex-start; }
 
   .nav-wrap {
     padding: 1rem 0;

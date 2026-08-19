@@ -554,6 +554,159 @@ function DashboardPage({ user }) {
   )
 }
 
+function DashboardCard({ title, eyebrow, children, className = '' }) {
+  return (
+    <section className={`dashboard-card ${className}`}>
+      <div className="dashboard-card-heading">
+        <div>
+          {eyebrow && <span className="card-eyebrow">{eyebrow}</span>}
+          <h3>{title}</h3>
+        </div>
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function LoadingDashboard() {
+  return (
+    <main className="page-shell">
+      <div className="container dashboard-wrap">
+        <div className="dashboard-loading" role="status">Loading your care dashboard...</div>
+      </div>
+    </main>
+  )
+}
+
+function formatDate(value) {
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value))
+}
+
+function PatientDashboardPage({ user }) {
+  const [dashboard, setDashboard] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const token = localStorage.getItem('movecare-token')
+    const loadDashboard = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/patients/me/dashboard`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.message || 'Unable to load your dashboard')
+        setDashboard(data)
+      } catch (loadError) {
+        setError(loadError.message)
+      }
+    }
+    loadDashboard()
+  }, [])
+
+  if (error) {
+    return (
+      <main className="page-shell">
+        <div className="container dashboard-wrap">
+          <div className="dashboard-error" role="alert">
+            <strong>We could not load your dashboard.</strong>
+            <p>{error}. Please try again shortly.</p>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  if (!dashboard) return <LoadingDashboard />
+
+  const { patient, plans, upcomingAppointment, progress, notifications, stats } = dashboard
+  const therapistName = patient.assignedTherapist?.user?.name || 'Care team pending'
+  const exerciseItems = plans.flatMap((plan) => plan.exercises.map((item) => ({ ...item, planName: plan.name })))
+  const completedExerciseIds = new Set(progress.filter((item) => item.completionStatus === 'Completed').map((item) => String(item.exercise?._id)))
+
+  return (
+    <main className="page-shell dashboard-page">
+      <div className="container dashboard-wrap">
+        <div className="dashboard-hero">
+          <div>
+            <span className="eyebrow accent">Patient dashboard</span>
+            <h2>Good to see you, {user.name.split(' ')[0]}.</h2>
+            <p>Here is your latest recovery snapshot and today&apos;s care plan.</p>
+          </div>
+          <div className="dashboard-avatar" aria-hidden="true">{user.name.charAt(0)}</div>
+        </div>
+
+        <div className="dashboard-grid">
+          <DashboardCard title="Recovery progress" eyebrow="This cycle" className="progress-card">
+            <div className="progress-summary">
+              <strong>{stats.completionRate}%</strong>
+              <span>exercise completion</span>
+            </div>
+            <div className="progress-track" aria-label={`${stats.completionRate}% exercise completion`}>
+              <span style={{ width: `${stats.completionRate}%` }} />
+            </div>
+            <div className="stat-row">
+              <span><strong>{stats.completedSessions}</strong> completed sessions</span>
+              <span><strong>{plans.length}</strong> active plans</span>
+            </div>
+          </DashboardCard>
+
+          <DashboardCard title="Pain & mobility" eyebrow="Latest signal">
+            <div className="signal-value">{stats.averagePain === null ? '--' : `${stats.averagePain}/10`}</div>
+            <div className="signal-label">Average reported pain</div>
+            <span className={`status-pill ${stats.mobilityStatus === 'Needs attention' ? 'warning' : ''}`}>{stats.mobilityStatus}</span>
+          </DashboardCard>
+
+          <DashboardCard title="Next appointment" eyebrow="Coming up">
+            {upcomingAppointment ? (
+              <div className="appointment-detail">
+                <strong>{formatDate(upcomingAppointment.appointmentDate)}</strong>
+                <span>{upcomingAppointment.startTime} - {upcomingAppointment.endTime} · {upcomingAppointment.type}</span>
+                <span>with {upcomingAppointment.therapist?.user?.name || therapistName}</span>
+                {upcomingAppointment.location && <small>{upcomingAppointment.location}</small>}
+              </div>
+            ) : <p className="empty-state">No upcoming appointments scheduled.</p>}
+          </DashboardCard>
+
+          <DashboardCard title="My profile" eyebrow="Care details">
+            <dl className="profile-list">
+              <div><dt>Condition</dt><dd>{patient.medicalCondition}</dd></div>
+              <div><dt>Therapist</dt><dd>{therapistName}</dd></div>
+              <div><dt>Status</dt><dd>{patient.status}</dd></div>
+            </dl>
+          </DashboardCard>
+
+          <DashboardCard title="Assigned exercises" eyebrow="Your plan" className="exercise-card">
+            {exerciseItems.length ? (
+              <div className="exercise-list">
+                {exerciseItems.map((item) => (
+                  <div className="exercise-row" key={`${item.planName}-${item.exercise?._id}`}>
+                    <span className={`exercise-check ${completedExerciseIds.has(String(item.exercise?._id)) ? 'complete' : ''}`} aria-hidden="true">{completedExerciseIds.has(String(item.exercise?._id)) ? '✓' : ''}</span>
+                    <div><strong>{item.exercise?.name || 'Exercise'}</strong><span>{item.exercise?.duration} min · {item.frequency}</span></div>
+                    <small>{item.exercise?.difficulty}</small>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="empty-state">Your care team has not assigned exercises yet.</p>}
+          </DashboardCard>
+
+          <DashboardCard title="Notifications" eyebrow="Stay informed">
+            {notifications.length ? (
+              <div className="notification-list">
+                {notifications.map((notification) => (
+                  <div className={`notification-row ${notification.isRead ? '' : 'unread'}`} key={notification._id}>
+                    <span className="notification-dot" aria-hidden="true" />
+                    <div><strong>{notification.title}</strong><p>{notification.message}</p></div>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="empty-state">You are all caught up.</p>}
+          </DashboardCard>
+        </div>
+      </div>
+    </main>
+  )
+}
+
 function App() {
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem('movecare-user')
@@ -589,7 +742,7 @@ function App() {
           <Route path="/register" element={<AuthPage mode="register" onAuthComplete={handleAuthComplete} />} />
 
           <Route element={<ProtectedRoute user={user} />}>
-            <Route path="/dashboard" element={<DashboardPage user={user} />} />
+            <Route path="/dashboard" element={user.role === 'Patient' ? <PatientDashboardPage user={user} /> : <DashboardPage user={user} />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
