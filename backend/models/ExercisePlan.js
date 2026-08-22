@@ -64,11 +64,10 @@ const exercisePlanSchema = new mongoose.Schema(
 );
 
 // Validate that endDate is after startDate
-exercisePlanSchema.pre('save', function validateDates(next) {
+exercisePlanSchema.pre('save', function validateDates() {
   if (this.endDate <= this.startDate) {
     throw new Error('End date must be after start date');
   }
-  next();
 });
 
 const ExercisePlan = mongoose.model('ExercisePlan', exercisePlanSchema);

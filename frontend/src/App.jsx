@@ -1231,7 +1231,7 @@ function App() {
           <Route path="/register" element={<AuthPage mode="register" onAuthComplete={handleAuthComplete} />} />
 
           <Route element={<ProtectedRoute user={user} />}>
-            <Route path="/dashboard" element={user.role === 'Patient' ? <PatientDashboardPage user={user} /> : user.role === 'Therapist' ? <TherapistDashboardPage user={user} /> : user.role === 'Admin' ? <AdminDashboardPage user={user} /> : <DashboardPage user={user} />} />
+            <Route path="/dashboard" element={user?.role === 'Patient' ? <PatientDashboardPage user={user} /> : user?.role === 'Therapist' ? <TherapistDashboardPage user={user} /> : user?.role === 'Admin' ? <AdminDashboardPage user={user} /> : <DashboardPage user={user} />} />
             <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/exercise-management" element={<ExerciseManagementPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/my-exercises" element={<PatientExercisesPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/therapist-appointments" element={<TherapistAppointmentsPage />} /></Route>
@@ -1239,7 +1239,7 @@ function App() {
             <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/patient-progress" element={<TherapistProgressPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/progress" element={<PatientProgressPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/ai-assistant" element={<AssistantPage />} /></Route>
-            <Route path="/monitoring" element={user.role === 'Patient' ? <PatientMonitoringPage /> : <TherapistMonitoringPage />} />
+            <Route path="/monitoring" element={user?.role === 'Patient' ? <PatientMonitoringPage /> : <TherapistMonitoringPage />} />
             <Route path="/notifications" element={<NotificationsPage user={user} />} />
             <Route path="/consultation/:id" element={<ConsultationPage user={user} />} />
           </Route>
