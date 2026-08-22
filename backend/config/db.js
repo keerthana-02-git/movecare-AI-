@@ -8,6 +8,9 @@ const connectDB = async () => {
 
   try {
     if (!uri) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('MONGODB_URI is required in production');
+      }
       memoryServer = await MongoMemoryServer.create();
       uri = memoryServer.getUri();
       process.env.MONGODB_URI = uri;
@@ -21,7 +24,7 @@ const connectDB = async () => {
       error?.message?.includes('ECONNREFUSED') ||
       error?.message?.includes('failed to connect to server');
 
-    if (isConnectionRefused) {
+    if (isConnectionRefused && process.env.NODE_ENV !== 'production') {
       try {
         memoryServer = await MongoMemoryServer.create();
         const memoryUri = memoryServer.getUri();

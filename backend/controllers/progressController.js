@@ -84,7 +84,7 @@ export const getMyProgress = async (req, res) => {
     if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
     res.json(await getProgressPayload(patient._id));
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load progress' });
+    res.status(500).json({ message: 'Unable to load progress' });
   }
 };
 
@@ -114,7 +114,7 @@ export const listTherapistPatientsProgress = async (req, res) => {
     }));
     res.json(summaries);
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load patient progress' });
+    res.status(500).json({ message: 'Unable to load patient progress' });
   }
 };
 
@@ -125,6 +125,6 @@ export const getTherapistPatientProgress = async (req, res) => {
     if (!patient) return res.status(404).json({ message: 'Patient not found for this therapist' });
     res.json(await getProgressPayload(patient._id));
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load patient progress' });
+    res.status(500).json({ message: 'Unable to load patient progress' });
   }
 };

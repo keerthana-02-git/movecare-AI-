@@ -44,7 +44,7 @@ const seedDatabase = async () => {
     console.log('Cleared existing data');
 
     // Create sample users
-    const users = await User.insertMany([
+    const userRecords = [
       {
         name: 'Dr. Sarah Johnson',
         email: 'therapist@movecare.com',
@@ -69,7 +69,8 @@ const seedDatabase = async () => {
         password: 'SecurePassword123!',
         role: 'Admin',
       },
-    ]);
+    ];
+    const users = await Promise.all(userRecords.map((user) => User.create(user)));
     console.log('Created sample users');
 
     // Create sample therapist

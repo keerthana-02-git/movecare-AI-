@@ -41,7 +41,7 @@ export const getAdminOverview = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load admin overview' });
+    res.status(500).json({ message: 'Unable to load admin overview' });
   }
 };
 
@@ -83,6 +83,6 @@ export const deleteExerciseAsAdmin = async (req, res) => {
     await ExercisePlan.updateMany({ 'exercises.exercise': exercise._id }, { $pull: { exercises: { exercise: exercise._id } } });
     res.json({ message: 'Exercise deleted successfully' });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to delete exercise' });
+    res.status(500).json({ message: 'Unable to delete exercise' });
   }
 };

@@ -42,7 +42,7 @@ export const getPatientSession = async (req, res) => {
     const session = await populateSession(MonitoringSession.findOne({ patient: patient._id, status: { $in: ['Active', 'Paused', 'Completed'] } }).sort({ updatedAt: -1 }));
     res.json(session || null);
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load monitoring session' });
+    res.status(500).json({ message: 'Unable to load monitoring session' });
   }
 };
 
@@ -102,6 +102,6 @@ export const getTherapistSessions = async (req, res) => {
     const assignedIds = new Set(therapist.patientsAssigned.map((id) => String(id)));
     res.json(sessions.filter((session) => assignedIds.has(String(session.patient?._id))));
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load live monitoring sessions' });
+    res.status(500).json({ message: 'Unable to load live monitoring sessions' });
   }
 };

@@ -6,22 +6,26 @@ const generateToken = (id) =>
 
 export const registerUser = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password } = req.body;
+    const normalizedEmail = String(email || '').trim().toLowerCase();
 
-    if (!name || !email || !password) {
+    if (!String(name || '').trim() || !normalizedEmail || !password) {
       return res.status(400).json({ message: 'Name, email and password are required' });
     }
+    if (String(password).length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
 
-    const userExists = await User.findOne({ email });
+    const userExists = await User.findOne({ email: normalizedEmail });
     if (userExists) {
       return res.status(400).json({ message: 'User already exists with this email' });
     }
 
     const user = await User.create({
-      name,
-      email,
+      name: String(name).trim(),
+      email: normalizedEmail,
       password,
-      role: role || 'Patient',
+      role: 'Patient',
     });
 
     res.status(201).json({
@@ -35,19 +39,20 @@ export const registerUser = async (req, res) => {
       token: generateToken(user._id),
     });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Registration failed' });
+    res.status(error.name === 'ValidationError' ? 400 : 500).json({ message: error.name === 'ValidationError' ? error.message : 'Registration failed' });
   }
 };
 
 export const loginUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const emailAddress = String(req.body.email || '').trim().toLowerCase();
+    const { password } = req.body;
 
-    if (!email || !password) {
+    if (!emailAddress || !password) {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: emailAddress }).select('+password');
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
@@ -68,7 +73,7 @@ export const loginUser = async (req, res) => {
       token: generateToken(user._id),
     });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Login failed' });
+    res.status(500).json({ message: 'Login failed' });
   }
 };
 

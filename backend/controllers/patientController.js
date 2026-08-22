@@ -67,6 +67,6 @@ export const getPatientDashboard = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load patient dashboard' });
+    res.status(500).json({ message: 'Unable to load patient dashboard' });
   }
 };

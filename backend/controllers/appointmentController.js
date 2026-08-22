@@ -35,7 +35,7 @@ export const listAvailableTherapists = async (req, res) => {
       .lean();
     res.json(therapists);
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load therapists' });
+    res.status(500).json({ message: 'Unable to load therapists' });
   }
 };
 
@@ -69,7 +69,7 @@ export const listAvailableSlots = async (req, res) => {
     }
     res.json(slots);
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load appointment slots' });
+    res.status(500).json({ message: 'Unable to load appointment slots' });
   }
 };
 
@@ -133,7 +133,7 @@ export const listPatientAppointments = async (req, res) => {
       .lean();
     res.json(appointments);
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load appointments' });
+    res.status(500).json({ message: 'Unable to load appointments' });
   }
 };
 
@@ -142,14 +142,6 @@ export const cancelPatientAppointment = async (req, res) => {
     const patient = await getPatient(req.user._id);
     const appointment = await Appointment.findOne({ _id: req.params.id, patient: patient?._id });
     if (!appointment) return res.status(404).json({ message: 'Appointment not found' });
-    const patientUser = await Patient.findById(appointment.patient).select('user');
-    await createNotification({
-      recipient: patientUser.user,
-      type: status === 'Cancelled' ? 'Appointment' : 'Appointment',
-      title: status === 'Accepted' ? 'Appointment accepted' : status === 'Cancelled' ? 'Appointment cancelled' : 'Appointment updated',
-      message: status === 'Accepted' ? 'Your therapist accepted the appointment request.' : `Your appointment status is now ${status}.`,
-      relatedEntity: { entityType: 'Appointment', entityId: appointment._id },
-    });
     if (['Cancelled', 'Completed', 'NoShow'].includes(appointment.status)) {
       return res.status(400).json({ message: 'This appointment cannot be cancelled' });
     }
@@ -162,9 +154,17 @@ export const cancelPatientAppointment = async (req, res) => {
     appointment.status = 'Cancelled';
     appointment.reasonForCancellation = req.body.reason || 'Cancelled by patient';
     await appointment.save();
+    const patientUser = await Patient.findById(appointment.patient).select('user');
+    await createNotification({
+      recipient: patientUser.user,
+      type: 'Appointment',
+      title: 'Appointment cancelled',
+      message: 'Your appointment was cancelled.',
+      relatedEntity: { entityType: 'Appointment', entityId: appointment._id },
+    });
     res.json(appointment);
   } catch (error) {
-    res.status(400).json({ message: error.message || 'Unable to cancel appointment' });
+    res.status(400).json({ message: 'Unable to cancel appointment' });
   }
 };
 
@@ -178,7 +178,7 @@ export const listTherapistAppointments = async (req, res) => {
       .lean();
     res.json(appointments);
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load appointments' });
+    res.status(500).json({ message: 'Unable to load appointments' });
   }
 };
 
@@ -212,7 +212,7 @@ export const getConsultation = async (req, res) => {
     if (!appointment) return res.status(404).json({ message: 'Consultation not found' });
     res.json(appointment);
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load consultation' });
+    res.status(500).json({ message: 'Unable to load consultation' });
   }
 };
 

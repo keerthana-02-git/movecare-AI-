@@ -39,7 +39,7 @@ export const listExercises = async (req, res) => {
     const exercises = await Exercise.find({ createdBy: therapist._id }).sort({ updatedAt: -1 }).lean();
     res.json(exercises);
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load exercises' });
+    res.status(500).json({ message: 'Unable to load exercises' });
   }
 };
 
@@ -82,7 +82,7 @@ export const deleteExercise = async (req, res) => {
     );
     res.json({ message: 'Exercise deleted successfully' });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to delete exercise' });
+    res.status(500).json({ message: 'Unable to delete exercise' });
   }
 };
 
@@ -97,7 +97,7 @@ export const listAssignmentOptions = async (req, res) => {
     ]);
     res.json({ patients, exercises });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load assignment options' });
+    res.status(500).json({ message: 'Unable to load assignment options' });
   }
 };
 
@@ -151,7 +151,7 @@ export const getPatientExercises = async (req, res) => {
     const progress = await Progress.find({ patient: patient._id }).sort({ datePerformed: -1 }).limit(100).lean();
     res.json({ plans, progress });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load assigned exercises' });
+    res.status(500).json({ message: 'Unable to load assigned exercises' });
   }
 };
 

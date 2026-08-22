@@ -499,8 +499,6 @@ function AuthPage({ mode, onAuthComplete }) {
               Role
               <select name="role" value={formData.role} onChange={handleChange}>
                 <option value="Patient">Patient</option>
-                <option value="Therapist">Therapist</option>
-                <option value="Admin">Admin</option>
               </select>
             </label>
           )}
@@ -1193,13 +1191,21 @@ function ConsultationPage({ user }) {
 function App() {
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem('movecare-user')
-    return savedUser ? JSON.parse(savedUser) : null
+    try { return savedUser ? JSON.parse(savedUser) : null } catch { return null }
   })
 
   useEffect(() => {
-    if (user) {
-      localStorage.setItem('movecare-user', JSON.stringify(user))
-    }
+    const token = localStorage.getItem('movecare-token')
+    if (!token) return
+    apiRequest('/auth/me').then((currentUser) => setUser(currentUser)).catch(() => {
+      localStorage.removeItem('movecare-token')
+      localStorage.removeItem('movecare-user')
+      setUser(null)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (user) localStorage.setItem('movecare-user', JSON.stringify(user))
   }, [user])
 
   const handleAuthComplete = (loggedInUser) => {

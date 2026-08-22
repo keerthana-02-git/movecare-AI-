@@ -104,7 +104,7 @@ export const getRecommendations = async (req, res) => {
       disclaimer: 'This software feature provides educational exercise suggestions, not a medical diagnosis or treatment plan. Review changes with a licensed healthcare professional.',
     });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to generate recommendations' });
+    res.status(500).json({ message: 'Unable to generate recommendations' });
   }
 };
 
@@ -142,7 +142,7 @@ export const getTherapistRecommendations = async (req, res) => {
 
     res.json(reviews);
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load therapist recommendations' });
+    res.status(500).json({ message: 'Unable to load therapist recommendations' });
   }
 };
 

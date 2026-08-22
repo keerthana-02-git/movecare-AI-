@@ -12,7 +12,7 @@ export const listNotifications = async (req, res) => {
     const unreadCount = await Notification.countDocuments({ recipient: req.user._id, isRead: false });
     res.json({ notifications, unreadCount });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to load notifications' });
+    res.status(500).json({ message: 'Unable to load notifications' });
   }
 };
 
@@ -38,7 +38,7 @@ export const markAllNotificationsRead = async (req, res) => {
     );
     res.json({ message: 'All notifications marked as read' });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to update notifications' });
+    res.status(500).json({ message: 'Unable to update notifications' });
   }
 };
 
