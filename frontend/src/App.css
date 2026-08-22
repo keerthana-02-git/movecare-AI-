@@ -54,6 +54,11 @@
   gap: 1rem;
 }
 
+.nav-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .nav-link {
   text-decoration: none;
   color: #38536f;
@@ -94,6 +99,12 @@
 .primary-btn:hover,
 .secondary-btn:hover {
   transform: translateY(-1px);
+}
+
+.primary-btn:disabled,
+.secondary-btn:disabled {
+  transform: none;
+  box-shadow: none;
 }
 
 .primary-btn.small,
@@ -585,6 +596,7 @@
 .notification-row.unread .notification-dot { background: #ef9b45; }
 .empty-state { margin: 0; color: #74899d; }
 .dashboard-loading, .dashboard-error { padding: 2rem; border-radius: 1rem; background: #fff; border: 1px solid #e1eaf0; color: #526d84; }
+.dashboard-loading { display: grid; min-height: 8rem; place-items: center; text-align: center; }
 .dashboard-error strong { color: #b42318; }
 .dashboard-error p { margin: 0.5rem 0 0; }
 .management-wrap { max-width: 1180px; }
@@ -820,6 +832,8 @@
     flex-wrap: wrap;
     justify-content: center;
   }
+
+  .nav-actions { width: 100%; gap: 0.55rem; }
 
   .brand {
     justify-content: center;

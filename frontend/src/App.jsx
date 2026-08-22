@@ -494,16 +494,7 @@ function AuthPage({ mode, onAuthComplete }) {
             />
           </label>
 
-          {isRegister && (
-            <label>
-              Role
-              <select name="role" value={formData.role} onChange={handleChange}>
-                <option value="Patient">Patient</option>
-              </select>
-            </label>
-          )}
-
-          {error && <div className="form-error">{error}</div>}
+          {error && <div className="form-error" role="alert">{error}</div>}
 
           <button type="submit" className="primary-btn auth-button" disabled={loading}>
             {loading ? 'Please wait...' : isRegister ? 'Create account' : 'Login'}
