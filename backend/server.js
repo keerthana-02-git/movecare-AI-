@@ -12,6 +12,7 @@ import progressRoutes from './routes/progressRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import monitoringRoutes from './routes/monitoringRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,6 +36,7 @@ app.use('/api/progress', progressRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/monitoring', monitoringRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin', adminRoutes);
 
 const startServer = async (port = PORT) => {
   await connectDB();

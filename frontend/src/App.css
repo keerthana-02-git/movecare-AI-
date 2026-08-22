@@ -505,6 +505,25 @@
 .dashboard-hero p { margin: 0; color: #526d84; }
 .dashboard-avatar { width: 3.5rem; height: 3.5rem; display: grid; place-items: center; border-radius: 50%; background: #f0b45b; color: #fff; font-size: 1.4rem; font-weight: 800; }
 .dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.admin-page { background: radial-gradient(circle at 82% 0%, rgba(43, 119, 209, 0.1), transparent 30rem); }
+.admin-stat-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+.admin-stat-grid .progress-metric { min-width: 0; background: rgba(255, 255, 255, 0.88); }
+.admin-workspace { padding: 0; overflow: hidden; }
+.admin-tabs { display: flex; gap: 0.2rem; overflow-x: auto; border-bottom: 1px solid #e5edf2; padding: 0.7rem 1.35rem 0; }
+.admin-tab { display: inline-flex; align-items: center; gap: 0.55rem; flex: 0 0 auto; border: 0; border-bottom: 3px solid transparent; padding: 0.7rem 0.8rem 0.8rem; background: transparent; color: #74899d; cursor: pointer; font: inherit; font-size: 0.85rem; font-weight: 700; }
+.admin-tab.active { border-bottom-color: #0d8b85; color: #163653; }
+.admin-tab span { border-radius: 999px; padding: 0.15rem 0.4rem; background: #edf5fd; color: #0d5ea8; font-size: 0.7rem; }
+.admin-table-wrap { overflow-x: auto; padding: 0.35rem 1.35rem 1.35rem; }
+.admin-table { width: 100%; min-width: 680px; border-collapse: collapse; color: #526d84; font-size: 0.82rem; }
+.admin-table th { padding: 0.85rem 0.7rem; border-bottom: 1px solid #dfe9ef; color: #74899d; font-size: 0.7rem; letter-spacing: 0.08em; text-align: left; text-transform: uppercase; }
+.admin-table td { padding: 0.9rem 0.7rem; border-bottom: 1px solid #edf1f4; vertical-align: middle; }
+.admin-table tr:last-child td { border-bottom: 0; }
+.admin-table td:first-child { min-width: 12rem; }
+.admin-table td strong, .admin-table td small { display: block; }
+.admin-table td strong { color: #163653; }
+.admin-table td small { margin-top: 0.25rem; color: #74899d; font-size: 0.72rem; }
+.admin-table select { border: 1px solid #d6e4f1; border-radius: 0.55rem; padding: 0.5rem 0.6rem; background: #f7fbff; color: #163653; font: inherit; }
+.role-tag { display: inline-block; border-radius: 999px; padding: 0.3rem 0.55rem; background: #e6f3f2; color: #0d8b85; font-size: 0.7rem; font-weight: 800; }
 .therapist-dashboard-page .dashboard-hero { margin-bottom: 1.35rem; }
 .therapist-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.8rem; margin-bottom: 1rem; }
 .therapist-stat-grid .progress-metric { background: rgba(255, 255, 255, 0.82); }
@@ -768,6 +787,7 @@
   }
 
   .dashboard-grid { grid-template-columns: 1fr; }
+  .admin-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .therapist-stat-grid, .therapist-dashboard-grid, .therapist-dashboard-grid.lower, .therapist-recommendation-grid { grid-template-columns: 1fr; }
   .exercise-card { grid-row: auto; }
   .dashboard-hero { align-items: flex-start; }

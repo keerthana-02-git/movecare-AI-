@@ -696,6 +696,46 @@ function DashboardPage({ user }) {
   )
 }
 
+function AdminDashboardPage({ user }) {
+  const [data, setData] = useState(null)
+  const [view, setView] = useState('users')
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  const load = async () => {
+    try { setData(await apiRequest('/admin/overview')); setError('') } catch (loadError) { setError(loadError.message) }
+  }
+
+  useEffect(() => { load() }, [])
+
+  const update = async (path, options, message) => {
+    try { await apiRequest(path, options); setNotice(message); await load() } catch (updateError) { setError(updateError.message) }
+  }
+
+  const removeExercise = async (exercise) => {
+    if (!window.confirm(`Delete ${exercise.name}?`)) return
+    await update(`/admin/exercises/${exercise._id}`, { method: 'DELETE' }, 'Exercise deleted.')
+  }
+
+  if (error && !data) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert"><strong>We could not load the admin dashboard.</strong><p>{error}. Please try again shortly.</p></div></div></main>
+  if (!data) return <LoadingDashboard />
+
+  const tabs = [
+    ['users', 'Users'], ['therapists', 'Therapists'], ['exercises', 'Exercises'], ['appointments', 'Appointments'],
+  ]
+  return <main className="page-shell admin-page"><div className="container management-wrap">
+    <div className="dashboard-hero"><div><span className="eyebrow accent">Administration</span><h2>Good to see you, {user.name.split(' ')[0]}.</h2><p>Manage access, care operations, and platform activity from one workspace.</p></div><div className="dashboard-avatar" aria-hidden="true">{user.name.charAt(0)}</div></div>
+    {error && <div className="form-error" role="alert">{error}</div>}{notice && <div className="success-message" role="status">{notice}</div>}
+    <div className="admin-stat-grid"><ProgressMetric label="Total users" value={data.stats.users} /><ProgressMetric label="Patients" value={data.stats.patients} /><ProgressMetric label="Therapists" value={data.stats.therapists} /><ProgressMetric label="Available therapists" value={data.stats.availableTherapists} /><ProgressMetric label="Active plans" value={data.stats.activePlans} /><ProgressMetric label="Appointments" value={data.stats.appointments} /></div>
+    <section className="management-panel admin-workspace"><div className="admin-tabs" role="tablist" aria-label="Administration sections">{tabs.map(([key, label]) => <button type="button" role="tab" aria-selected={view === key} className={view === key ? 'admin-tab active' : 'admin-tab'} key={key} onClick={() => setView(key)}>{label}<span>{key === 'users' ? data.users.length : key === 'therapists' ? data.therapists.length : key === 'exercises' ? data.exercises.length : data.appointments.length}</span></button>)}</div>
+      {view === 'users' && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>User</th><th>Role</th><th>Joined</th><th>Manage</th></tr></thead><tbody>{data.users.map((item) => <tr key={item._id}><td><strong>{item.name}</strong><small>{item.email}</small></td><td><span className="role-tag">{item.role}</span></td><td>{formatDate(item.createdAt)}</td><td><select value={item.role} onChange={(event) => update(`/admin/users/${item._id}/role`, { method: 'PATCH', body: JSON.stringify({ role: event.target.value }) }, 'User role updated.')}><option>Patient</option><option>Therapist</option><option>Admin</option></select></td></tr>)}</tbody></table></div>}
+      {view === 'therapists' && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Therapist</th><th>Specialization</th><th>Patients</th><th>Status</th></tr></thead><tbody>{data.therapists.map((item) => <tr key={item._id}><td><strong>{item.user?.name}</strong><small>{item.user?.email} · {item.licenseNumber}</small></td><td>{item.specialization}</td><td>{item.patientsAssigned?.length || 0}</td><td><select value={item.status} onChange={(event) => update(`/admin/therapists/${item._id}/status`, { method: 'PATCH', body: JSON.stringify({ status: event.target.value }) }, 'Therapist status updated.')}><option>Available</option><option>Unavailable</option><option>OnLeave</option></select></td></tr>)}</tbody></table></div>}
+      {view === 'exercises' && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Exercise</th><th>Category</th><th>Difficulty</th><th>Created by</th><th>Manage</th></tr></thead><tbody>{data.exercises.map((item) => <tr key={item._id}><td><strong>{item.name}</strong><small>{item.targetBodyPart} · {item.duration} min</small></td><td>{item.category}</td><td>{item.difficulty}</td><td>{item.createdBy?.user?.name || 'Unknown'}</td><td><button type="button" className="danger-btn" onClick={() => removeExercise(item)}>Delete</button></td></tr>)}</tbody></table></div>}
+      {view === 'appointments' && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Date</th><th>Patient</th><th>Therapist</th><th>Type</th><th>Status</th></tr></thead><tbody>{data.appointments.map((item) => <tr key={item._id}><td><strong>{formatDate(item.appointmentDate)}</strong><small>{item.startTime} - {item.endTime}</small></td><td>{item.patient?.user?.name || 'Unknown'}</td><td>{item.therapist?.user?.name || 'Unknown'}</td><td>{item.type}</td><td><AppointmentStatus status={item.status} /></td></tr>)}</tbody></table>{!data.appointments.length && <p className="empty-state">No appointments recorded yet.</p>}</div>}
+    </section>
+  </div></main>
+}
+
 function TherapistDashboardPage({ user }) {
   const [data, setData] = useState(null)
   const [selectedId, setSelectedId] = useState('')
@@ -1185,7 +1225,7 @@ function App() {
           <Route path="/register" element={<AuthPage mode="register" onAuthComplete={handleAuthComplete} />} />
 
           <Route element={<ProtectedRoute user={user} />}>
-            <Route path="/dashboard" element={user.role === 'Patient' ? <PatientDashboardPage user={user} /> : user.role === 'Therapist' ? <TherapistDashboardPage user={user} /> : <DashboardPage user={user} />} />
+            <Route path="/dashboard" element={user.role === 'Patient' ? <PatientDashboardPage user={user} /> : user.role === 'Therapist' ? <TherapistDashboardPage user={user} /> : user.role === 'Admin' ? <AdminDashboardPage user={user} /> : <DashboardPage user={user} />} />
             <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/exercise-management" element={<ExerciseManagementPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/my-exercises" element={<PatientExercisesPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/therapist-appointments" element={<TherapistAppointmentsPage />} /></Route>
