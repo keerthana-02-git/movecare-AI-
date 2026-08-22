@@ -6,6 +6,7 @@ import {
   Outlet,
   Route,
   Routes,
+  useSearchParams,
   useParams,
   useNavigate,
 } from 'react-router-dom'
@@ -695,6 +696,53 @@ function DashboardPage({ user }) {
   )
 }
 
+function TherapistDashboardPage({ user }) {
+  const [data, setData] = useState(null)
+  const [selectedId, setSelectedId] = useState('')
+  const [error, setError] = useState('')
+
+  const loadDashboard = async () => {
+    try {
+      const [patients, appointments, options, recommendations] = await Promise.all([
+        apiRequest('/progress/patients'), apiRequest('/appointments/therapist'),
+        apiRequest('/exercises/assignment-options'), apiRequest('/ai/therapist/recommendations'),
+      ])
+      setData({ patients, appointments, options, recommendations })
+      setSelectedId((current) => current || patients[0]?.patient?._id || '')
+      setError('')
+    } catch (loadError) { setError(loadError.message) }
+  }
+
+  useEffect(() => { loadDashboard() }, [])
+
+  const manageAppointment = async (appointment, status) => {
+    try { await apiRequest(`/appointments/${appointment._id}/manage`, { method: 'PATCH', body: JSON.stringify({ status }) }); await loadDashboard() } catch (manageError) { setError(manageError.message) }
+  }
+
+  if (error && !data) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert"><strong>We could not load your therapist workspace.</strong><p>{error}. Please try again shortly.</p></div></div></main>
+  if (!data) return <LoadingDashboard />
+
+  const today = new Date()
+  const selected = data.patients.find((item) => item.patient._id === selectedId)
+  const upcoming = data.appointments.filter((item) => new Date(item.appointmentDate) >= today && !['Cancelled', 'NoShow'].includes(item.status)).slice(0, 4)
+  const history = data.appointments.filter((item) => new Date(item.appointmentDate) < today || ['Cancelled', 'NoShow'].includes(item.status)).slice().reverse().slice(0, 5)
+  const averageAdherence = data.patients.length ? Math.round(data.patients.reduce((total, item) => total + item.summary.exerciseAdherence, 0) / data.patients.length) : 0
+
+  return <main className="page-shell dashboard-page therapist-dashboard-page"><div className="container management-wrap">
+    <div className="dashboard-hero"><div><span className="eyebrow accent">Therapist workspace</span><h2>Good to see you, {user.name.split(' ')[0]}.</h2><p>Your assigned caseload, schedule, and clinical signals in one place.</p></div><div className="dashboard-avatar" aria-hidden="true">{user.name.charAt(0)}</div></div>
+    {error && <div className="form-error" role="alert">{error}</div>}
+    <div className="therapist-stat-grid"><ProgressMetric label="Assigned patients" value={data.patients.length} /><ProgressMetric label="Upcoming consultations" value={upcoming.length} /><ProgressMetric label="Pending requests" value={data.appointments.filter((item) => item.status === 'Scheduled').length} /><ProgressMetric label="Average adherence" value={averageAdherence} suffix="%" /></div>
+    <div className="therapist-dashboard-grid">
+      <section className="management-panel patient-directory"><div className="panel-heading"><div><span className="card-eyebrow">Care roster</span><h3>Assigned patients</h3></div><span className="count-badge">{data.patients.length}</span></div>{data.patients.length ? data.patients.map((item) => <button type="button" className={`patient-progress-option ${selectedId === item.patient._id ? 'selected' : ''}`} key={item.patient._id} onClick={() => setSelectedId(item.patient._id)}><span className="therapist-initial">{item.patient.user?.name?.charAt(0)}</span><span><strong>{item.patient.user?.name}</strong><small>{item.patient.medicalCondition} · {item.summary.exerciseAdherence}% adherence</small></span></button>) : <p className="empty-state">No assigned patients found.</p>}</section>
+      <section className="management-panel patient-profile-card"><div className="panel-heading"><div><span className="card-eyebrow">Patient profile</span><h3>{selected?.patient.user?.name || 'Select a patient'}</h3></div>{selected && <NavLink className="secondary-btn small" to={`/patient-progress?patient=${selected.patient._id}`}>View progress</NavLink>}</div>{selected ? <><dl className="profile-list"><div><dt>Condition</dt><dd>{selected.patient.medicalCondition}</dd></div><div><dt>Injury</dt><dd>{selected.patient.injuryDescription || 'Not recorded'}</dd></div><div><dt>Date of birth</dt><dd>{formatDate(selected.patient.dateOfBirth)}</dd></div><div><dt>Status</dt><dd>{selected.patient.status}</dd></div><div><dt>Email</dt><dd>{selected.patient.user?.email}</dd></div></dl><div className="profile-stat-row"><span><strong>{selected.summary.exerciseAdherence}%</strong> adherence</span><span><strong>{selected.summary.mobilityScore ?? '--'}</strong> mobility</span><span><strong>{selected.summary.averagePain ?? '--'}</strong> pain</span></div></> : <p className="empty-state">Select an assigned patient to review their profile.</p>}</section>
+    </div>
+    <div className="therapist-dashboard-grid lower"><section className="management-panel"><div className="panel-heading"><div><span className="card-eyebrow">Today and next</span><h3>Upcoming consultations</h3></div><NavLink className="secondary-btn small" to="/therapist-appointments">Manage schedule</NavLink></div>{upcoming.length ? <div className="appointment-list">{upcoming.map((appointment) => <article className="dashboard-appointment" key={appointment._id}><div><strong>{appointment.patient?.user?.name}</strong><span>{formatDate(appointment.appointmentDate)} · {appointment.startTime} - {appointment.endTime}</span><small>{appointment.type}</small></div><div className="appointment-actions">{appointment.status === 'Scheduled' && <button className="primary-btn small" type="button" onClick={() => manageAppointment(appointment, 'Accepted')}>Accept</button>}<AppointmentStatus status={appointment.status} /></div></article>)}</div> : <p className="empty-state">No upcoming consultations.</p>}</section>
+      <section className="management-panel"><div className="panel-heading"><div><span className="card-eyebrow">Care history</span><h3>Recent consultations</h3></div></div>{history.length ? <div className="appointment-list">{history.map((appointment) => <article className="dashboard-appointment" key={appointment._id}><div><strong>{appointment.patient?.user?.name}</strong><span>{formatDate(appointment.appointmentDate)} · {appointment.type}</span></div><AppointmentStatus status={appointment.status} /></article>)}</div> : <p className="empty-state">No consultation history yet.</p>}</section></div>
+    <section className="therapist-tools"><div className="tool-heading"><div><span className="eyebrow accent">Clinical tools</span><h3>Keep care moving</h3></div><div className="tool-actions"><NavLink className="primary-btn small" to="/exercise-management">Create or assign exercises</NavLink><NavLink className="secondary-btn small" to="/patient-progress">Review all progress</NavLink></div></div><div className="tool-summary"><span><strong>{data.options.exercises.length}</strong> exercises in your library</span><span><strong>{data.options.patients.length}</strong> patients ready for assignment</span><NavLink className="secondary-btn small" to="/monitoring">Open live monitor</NavLink></div></section>
+    <section className="ai-recommendation-panel therapist-ai-panel"><div className="ai-panel-heading"><div><span className="card-eyebrow">Decision support</span><h3>AI recommendation review</h3><p>Review exercise suggestions generated from each patient&apos;s recorded condition, pain, mobility, and history.</p></div><span className="ai-badge">For clinician review</span></div>{data.recommendations.length ? <div className="therapist-recommendation-grid">{data.recommendations.map((review) => <article className="therapist-recommendation" key={review.patient._id}><div className="recommendation-title"><strong>{review.patient.user?.name}</strong><span>{review.inputProfile.condition}</span></div><p>{review.recommendations[0]?.exercise?.name || 'No matching exercise yet'}{review.recommendations[0] ? ` · ${review.recommendations[0].reason}` : ' · Build the library to generate suggestions.'}</p><div className="recommendation-meta"><span>{review.plan.difficulty}</span><span>{review.plan.duration} min</span><span>{review.plan.frequency}</span></div></article>)}</div> : <p className="empty-state">No assigned patients available for recommendations.</p>}<p className="ai-disclaimer">AI suggestions support clinician review and do not replace professional assessment or treatment decisions.</p></section>
+  </div></main>
+}
+
 function DashboardCard({ title, eyebrow, children, className = '' }) {
   return (
     <section className={`dashboard-card ${className}`}>
@@ -1025,7 +1073,8 @@ function TherapistProgressPage() {
   const [selectedId, setSelectedId] = useState('')
   const [detail, setDetail] = useState(null)
   const [error, setError] = useState('')
-  useEffect(() => { apiRequest('/progress/patients').then((data) => { setPatients(data); if (data[0]) setSelectedId(data[0].patient._id) }).catch((loadError) => setError(loadError.message)) }, [])
+  const [searchParams] = useSearchParams()
+  useEffect(() => { apiRequest('/progress/patients').then((data) => { setPatients(data); const requestedId = searchParams.get('patient'); setSelectedId(data.some((item) => item.patient._id === requestedId) ? requestedId : data[0]?.patient?._id || '') }).catch((loadError) => setError(loadError.message)) }, [searchParams])
   useEffect(() => { if (selectedId) apiRequest(`/progress/patients/${selectedId}`).then(setDetail).catch((loadError) => setError(loadError.message)) }, [selectedId])
   if (error && !patients) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
   if (!patients) return <LoadingDashboard />
@@ -1136,7 +1185,7 @@ function App() {
           <Route path="/register" element={<AuthPage mode="register" onAuthComplete={handleAuthComplete} />} />
 
           <Route element={<ProtectedRoute user={user} />}>
-            <Route path="/dashboard" element={user.role === 'Patient' ? <PatientDashboardPage user={user} /> : <DashboardPage user={user} />} />
+            <Route path="/dashboard" element={user.role === 'Patient' ? <PatientDashboardPage user={user} /> : user.role === 'Therapist' ? <TherapistDashboardPage user={user} /> : <DashboardPage user={user} />} />
             <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/exercise-management" element={<ExerciseManagementPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/my-exercises" element={<PatientExercisesPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/therapist-appointments" element={<TherapistAppointmentsPage />} /></Route>

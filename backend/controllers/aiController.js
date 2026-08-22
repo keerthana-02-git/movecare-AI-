@@ -1,4 +1,4 @@
-import { Exercise, ExercisePlan, Patient, Progress } from '../models/index.js';
+import { Exercise, ExercisePlan, Patient, Progress, Therapist } from '../models/index.js';
 
 const difficultyOrder = ['Easy', 'Medium', 'Hard'];
 
@@ -105,6 +105,44 @@ export const getRecommendations = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: error.message || 'Unable to generate recommendations' });
+  }
+};
+
+export const getTherapistRecommendations = async (req, res) => {
+  try {
+    const therapist = await Therapist.findOne({ user: req.user._id }).lean();
+    if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
+
+    const [patients, exercises] = await Promise.all([
+      Patient.find({ assignedTherapist: therapist._id }).populate('user', 'name email').lean(),
+      Exercise.find({ createdBy: therapist._id }).sort({ name: 1 }).lean(),
+    ]);
+    const reviews = await Promise.all(patients.map(async (patient) => {
+      const [progress, plans] = await Promise.all([
+        Progress.find({ patient: patient._id }).sort({ datePerformed: -1 }).limit(50).lean(),
+        ExercisePlan.find({ patient: patient._id, status: { $in: ['Active', 'Paused'] } }).select('exercises.exercise').lean(),
+      ]);
+      const profile = buildRecommendationProfile(patient, progress);
+      const plan = suggestedPlan(profile);
+      const assignedIds = new Set(plans.flatMap((item) => item.exercises.map((exercise) => String(exercise.exercise))));
+      const recommendations = exercises
+        .map((exercise) => ({ exercise, score: scoreExercise(exercise, profile, plan) }))
+        .sort((first, second) => second.score - first.score)
+        .slice(0, 3)
+        .map(({ exercise }) => ({
+          exercise,
+          reason: assignedIds.has(String(exercise._id)) ? 'Already in the active plan; review pacing and adherence.' : recommendationReason(exercise, profile, plan),
+          alreadyAssigned: assignedIds.has(String(exercise._id)),
+          suggestedDifficulty: plan.difficulty,
+          suggestedDuration: plan.duration,
+          suggestedFrequency: plan.frequency,
+        }));
+      return { patient, inputProfile: profile, plan, recommendations };
+    }));
+
+    res.json(reviews);
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Unable to load therapist recommendations' });
   }
 };
 

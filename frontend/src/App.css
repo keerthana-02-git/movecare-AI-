@@ -505,6 +505,31 @@
 .dashboard-hero p { margin: 0; color: #526d84; }
 .dashboard-avatar { width: 3.5rem; height: 3.5rem; display: grid; place-items: center; border-radius: 50%; background: #f0b45b; color: #fff; font-size: 1.4rem; font-weight: 800; }
 .dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.therapist-dashboard-page .dashboard-hero { margin-bottom: 1.35rem; }
+.therapist-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.8rem; margin-bottom: 1rem; }
+.therapist-stat-grid .progress-metric { background: rgba(255, 255, 255, 0.82); }
+.therapist-dashboard-grid { display: grid; grid-template-columns: 0.8fr 1.2fr; align-items: start; gap: 1rem; margin-bottom: 1rem; }
+.therapist-dashboard-grid.lower { grid-template-columns: 1.2fr 0.8fr; }
+.patient-directory .patient-progress-option { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+.patient-profile-card .profile-list { margin-bottom: 1rem; }
+.profile-stat-row, .tool-summary { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.profile-stat-row span, .tool-summary span { border-radius: 0.6rem; padding: 0.55rem 0.65rem; background: #f1faf9; color: #526d84; font-size: 0.78rem; }
+.profile-stat-row strong, .tool-summary strong { color: #0d8b85; font-size: 1rem; }
+.dashboard-appointment { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-bottom: 1px solid #edf1f4; padding: 0.85rem 0; }
+.dashboard-appointment:last-child { border-bottom: 0; padding-bottom: 0; }
+.dashboard-appointment > div:first-child { display: grid; gap: 0.25rem; min-width: 0; }
+.dashboard-appointment strong { color: #163653; }
+.dashboard-appointment span, .dashboard-appointment small { color: #74899d; font-size: 0.78rem; }
+.therapist-tools { margin-bottom: 1rem; border: 1px solid rgba(13, 139, 133, 0.18); border-radius: 1rem; padding: 1.2rem 1.35rem; background: #f1faf9; }
+.tool-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.tool-heading h3 { margin: 0; color: #163653; }
+.tool-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; }
+.therapist-ai-panel { margin-top: 0; }
+.therapist-recommendation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; }
+.therapist-recommendation { border: 1px solid #e0eceb; border-radius: 0.75rem; padding: 0.9rem; background: rgba(255, 255, 255, 0.82); }
+.therapist-recommendation .recommendation-title { justify-content: space-between; }
+.therapist-recommendation .recommendation-title span { color: #74899d; font-size: 0.72rem; }
+.therapist-recommendation p { min-height: 2.4rem; margin: 0.55rem 0 0.8rem; color: #526d84; font-size: 0.78rem; line-height: 1.45; }
 .dashboard-card { background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(19, 92, 151, 0.1); border-radius: 1rem; padding: 1.35rem; box-shadow: 0 20px 28px rgba(12, 37, 58, 0.05); }
 .dashboard-card-heading { margin-bottom: 1.2rem; }
 .dashboard-card h3 { margin: 0; color: #163653; font-size: 1.15rem; }
@@ -743,6 +768,7 @@
   }
 
   .dashboard-grid { grid-template-columns: 1fr; }
+  .therapist-stat-grid, .therapist-dashboard-grid, .therapist-dashboard-grid.lower, .therapist-recommendation-grid { grid-template-columns: 1fr; }
   .exercise-card { grid-row: auto; }
   .dashboard-hero { align-items: flex-start; }
   .management-layout, .exercise-library-grid, .patient-exercise-grid { grid-template-columns: 1fr; }
@@ -762,6 +788,8 @@
   .session-inputs { grid-template-columns: 1fr; }
   .notifications-layout { grid-template-columns: 1fr; }
   .notification-preview { align-items: flex-start; flex-direction: column; }
+  .tool-heading { align-items: flex-start; flex-direction: column; }
+  .dashboard-appointment { align-items: flex-start; flex-direction: column; }
 
   .nav-wrap {
     padding: 1rem 0;
