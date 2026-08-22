@@ -212,22 +212,9 @@ const progress = await Progress.findByIdAndUpdate(
 
 ## 🔗 Sample Data Login Credentials
 
-After running `node models/seed.js`, you can use:
-
-**Therapist Account:**
-- Email: `therapist@movecare.com`
-- Password: `SecurePassword123!`
-- Role: Therapist
-
-**Patient Accounts:**
-- Email: `patient1@movecare.com`
-- Email: `patient2@movecare.com`
-- Password: `SecurePassword123!` (both)
-
-**Admin Account:**
-- Email: `admin@movecare.com`
-- Password: `SecurePassword123!`
-- Role: Admin
+The seed script creates development accounts with the email addresses defined in
+`backend/models/seed.js`. Set `SEED_PASSWORD` in your local environment before
+running the script; never commit that value or share it in documentation.
 
 ---
 

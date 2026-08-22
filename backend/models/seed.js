@@ -18,6 +18,11 @@ const seedDatabase = async () => {
   let memoryServer;
   try {
     let mongoUri = process.env.MONGODB_URI;
+    const seedPassword = process.env.SEED_PASSWORD;
+
+    if (!seedPassword || seedPassword.length < 6) {
+      throw new Error('SEED_PASSWORD must be provided and at least 6 characters long');
+    }
 
     // Use MongoDB Memory Server if no URI provided
     if (!mongoUri) {
@@ -46,27 +51,27 @@ const seedDatabase = async () => {
     // Create sample users
     const userRecords = [
       {
-        name: 'Dr. Sarah Johnson',
-        email: 'therapist@movecare.com',
-        password: 'SecurePassword123!',
+        name: 'Demo Therapist',
+        email: 'therapist@example.com',
+        password: seedPassword,
         role: 'Therapist',
       },
       {
-        name: 'John Doe',
-        email: 'patient1@movecare.com',
-        password: 'SecurePassword123!',
+        name: 'Demo Patient One',
+        email: 'patient1@example.com',
+        password: seedPassword,
         role: 'Patient',
       },
       {
-        name: 'Jane Smith',
-        email: 'patient2@movecare.com',
-        password: 'SecurePassword123!',
+        name: 'Demo Patient Two',
+        email: 'patient2@example.com',
+        password: seedPassword,
         role: 'Patient',
       },
       {
-        name: 'Admin User',
-        email: 'admin@movecare.com',
-        password: 'SecurePassword123!',
+        name: 'Demo Administrator',
+        email: 'admin@example.com',
+        password: seedPassword,
         role: 'Admin',
       },
     ];
@@ -79,8 +84,6 @@ const seedDatabase = async () => {
       licenseNumber: 'PT-2024-12345',
       specialization: 'Physical Therapy',
       yearsOfExperience: 8,
-      phoneNumber: '5551234567',
-      address: '123 Health Center Lane, Medical City, MC 12345',
       availability: {
         monday: { start: '09:00', end: '17:00' },
         tuesday: { start: '09:00', end: '17:00' },
@@ -99,14 +102,8 @@ const seedDatabase = async () => {
         dateOfBirth: new Date('1985-06-15'),
         gender: 'Male',
         medicalCondition: 'Post-operative knee recovery',
-        injuryDescription: 'ACL reconstruction surgery - 6 weeks post-op',
+        injuryDescription: 'Synthetic ACL recovery scenario',
         assignedTherapist: therapist._id,
-        phoneNumber: '5559876543',
-        address: '456 Patient Avenue, Wellness Town, WT 54321',
-        emergencyContact: {
-          name: 'Mary Doe',
-          phone: '5559876544',
-        },
         status: 'Active',
       },
       {
@@ -114,14 +111,8 @@ const seedDatabase = async () => {
         dateOfBirth: new Date('1990-03-20'),
         gender: 'Female',
         medicalCondition: 'Rotator cuff rehabilitation',
-        injuryDescription: 'Rotator cuff strain from repetitive strain injury',
+        injuryDescription: 'Synthetic shoulder rehabilitation scenario',
         assignedTherapist: therapist._id,
-        phoneNumber: '5551112222',
-        address: '789 Recovery Road, Health City, HC 98765',
-        emergencyContact: {
-          name: 'Tom Smith',
-          phone: '5551112223',
-        },
         status: 'Active',
       },
     ]);
@@ -297,7 +288,7 @@ const seedDatabase = async () => {
         recipient: users[1]._id,
         type: 'Appointment',
         title: 'Upcoming Appointment',
-        message: 'You have an appointment with Dr. Sarah Johnson tomorrow at 2:00 PM',
+        message: 'You have an appointment with your demo therapist tomorrow at 2:00 PM',
         relatedEntity: {
           entityType: 'Appointment',
           entityId: new mongoose.Types.ObjectId(),
@@ -315,7 +306,7 @@ const seedDatabase = async () => {
         recipient: users[0]._id,
         type: 'ProgressUpdate',
         title: 'Patient Progress Update',
-        message: 'John Doe has completed their daily exercises',
+        message: 'Demo Patient One has completed their daily exercises',
         relatedEntity: {
           entityType: 'Patient',
           entityId: patients[0]._id,

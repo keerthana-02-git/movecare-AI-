@@ -81,6 +81,7 @@ MONGODB_URI=mongodb://127.0.0.1:27017/movecare
 JWT_SECRET=replace-with-a-long-random-secret
 CLIENT_ORIGIN=http://localhost:5173,http://127.0.0.1:5173
 NODE_ENV=development
+SEED_PASSWORD=choose-a-local-secret
 ```
 
 In production, use a JWT secret of at least 32 characters, a managed MongoDB connection, and an explicit trusted frontend origin.
