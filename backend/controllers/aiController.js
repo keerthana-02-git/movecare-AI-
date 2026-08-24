@@ -1,4 +1,6 @@
 import { Exercise, ExercisePlan, Patient, Progress, Therapist } from '../models/index.js';
+import { ensureTherapistProfile } from './authController.js';
+import { ensurePatientProfile } from './patientController.js';
 
 const difficultyOrder = ['Easy', 'Medium', 'Hard'];
 
@@ -67,13 +69,16 @@ const recommendationReason = (exercise, profile, plan) => {
 
 export const getRecommendations = async (req, res) => {
   try {
-    const patient = await Patient.findOne({ user: req.user._id }).lean();
+    const patient = await ensurePatientProfile(req.user);
     if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
-    const [progress, plans, exercises] = await Promise.all([
+    let [progress, plans, exercises] = await Promise.all([
       Progress.find({ patient: patient._id }).sort({ datePerformed: -1 }).limit(50).lean(),
       ExercisePlan.find({ patient: patient._id, status: { $in: ['Active', 'Paused'] } }).select('exercises.exercise').lean(),
       Exercise.find(patient.assignedTherapist ? { createdBy: patient.assignedTherapist } : {}).sort({ name: 1 }).lean(),
     ]);
+    if (!exercises.length) {
+      exercises = await Exercise.find().sort({ name: 1 }).lean();
+    }
     const profile = buildRecommendationProfile(patient, progress);
     const plan = suggestedPlan(profile);
     const assignedIds = new Set(plans.flatMap((item) => item.exercises.map((exercise) => String(exercise.exercise))));
@@ -110,13 +115,18 @@ export const getRecommendations = async (req, res) => {
 
 export const getTherapistRecommendations = async (req, res) => {
   try {
-    const therapist = await Therapist.findOne({ user: req.user._id }).lean();
+    const therapist = await ensureTherapistProfile(req.user);
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
 
-    const [patients, exercises] = await Promise.all([
-      Patient.find({ assignedTherapist: therapist._id }).populate('user', 'name email').lean(),
+    let [patients, exercises] = await Promise.all([
+      Patient.find({
+        $or: [{ assignedTherapist: therapist._id }, { _id: { $in: therapist.patientsAssigned || [] } }],
+      }).populate('user', 'name email').lean(),
       Exercise.find({ createdBy: therapist._id }).sort({ name: 1 }).lean(),
     ]);
+    if (!exercises.length) {
+      exercises = await Exercise.find().sort({ name: 1 }).lean();
+    }
     const reviews = await Promise.all(patients.map(async (patient) => {
       const [progress, plans] = await Promise.all([
         Progress.find({ patient: patient._id }).sort({ datePerformed: -1 }).limit(50).lean(),

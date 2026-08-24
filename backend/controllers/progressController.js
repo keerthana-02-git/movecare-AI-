@@ -1,4 +1,6 @@
 import { Appointment, ExercisePlan, Patient, Progress, Therapist } from '../models/index.js';
+import { ensureTherapistProfile } from './authController.js';
+import { ensurePatientProfile } from './patientController.js';
 
 const frequencyDays = {
   Daily: 1,
@@ -8,8 +10,15 @@ const frequencyDays = {
   Weekly: 7,
 };
 
-const getPatient = (userId) => Patient.findOne({ user: userId });
-const getTherapist = (userId) => Therapist.findOne({ user: userId });
+const getPatient = async (user) => {
+  if (user?.role === 'Patient') return ensurePatientProfile(user);
+  return Patient.findOne({ user: user?._id || user });
+};
+
+const getTherapist = async (user) => {
+  if (user?.role === 'Therapist') return ensureTherapistProfile(user);
+  return Therapist.findOne({ user: user?._id || user });
+};
 
 const round = (value) => Math.round(value * 10) / 10;
 
@@ -80,7 +89,7 @@ const getProgressPayload = async (patientId) => {
 
 export const getMyProgress = async (req, res) => {
   try {
-    const patient = await getPatient(req.user._id);
+    const patient = await getPatient(req.user);
     if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
     res.json(await getProgressPayload(patient._id));
   } catch (error) {
@@ -91,9 +100,9 @@ export const getMyProgress = async (req, res) => {
 export const recordMyProgress = async (req, res) => {
   try {
     const { exercise, exercisePlan, completionStatus = 'Completed', painLevel, mobilityScore, notes, repsCompleted, setsCompleted, difficulty } = req.body;
-    const patient = await getPatient(req.user._id);
+    const patient = await getPatient(req.user);
     const plan = await ExercisePlan.findOne({ _id: exercisePlan, patient: patient?._id });
-    if (!patient || !plan || !plan.exercises.some((item) => String(item.exercise) === String(exercise))) {
+    if (!patient || !plan || !plan.exercises.some((item) => String(item.exercise?._id || item.exercise) === String(exercise))) {
       return res.status(404).json({ message: 'Assigned exercise plan not found' });
     }
     const entry = await Progress.create({ patient: patient._id, exercise, exercisePlan, completionStatus, painLevel, mobilityScore, notes, repsCompleted, setsCompleted, difficulty });
@@ -105,9 +114,11 @@ export const recordMyProgress = async (req, res) => {
 
 export const listTherapistPatientsProgress = async (req, res) => {
   try {
-    const therapist = await getTherapist(req.user._id);
+    const therapist = await getTherapist(req.user);
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
-    const patients = await Patient.find({ assignedTherapist: therapist._id }).populate('user', 'name email').lean();
+    const patients = await Patient.find({
+      $or: [{ assignedTherapist: therapist._id }, { _id: { $in: therapist.patientsAssigned || [] } }],
+    }).populate('user', 'name email').lean();
     const summaries = await Promise.all(patients.map(async (patient) => {
       const payload = await getProgressPayload(patient._id);
       return { patient: payload.patient, summary: payload.summary, timeline: payload.timeline };
@@ -120,8 +131,11 @@ export const listTherapistPatientsProgress = async (req, res) => {
 
 export const getTherapistPatientProgress = async (req, res) => {
   try {
-    const therapist = await getTherapist(req.user._id);
-    const patient = await Patient.findOne({ _id: req.params.patientId, assignedTherapist: therapist?._id });
+    const therapist = await getTherapist(req.user);
+    const patient = await Patient.findOne({
+      _id: req.params.patientId,
+      $or: [{ assignedTherapist: therapist?._id }, { _id: { $in: therapist?.patientsAssigned || [] } }],
+    });
     if (!patient) return res.status(404).json({ message: 'Patient not found for this therapist' });
     res.json(await getProgressPayload(patient._id));
   } catch (error) {

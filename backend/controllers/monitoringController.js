@@ -1,8 +1,17 @@
 import { ExercisePlan, MonitoringSession, Patient, Progress, Therapist } from '../models/index.js';
+import { ensureTherapistProfile } from './authController.js';
+import { ensurePatientProfile } from './patientController.js';
 import { createNotification } from './notificationController.js';
 
-const getPatient = (userId) => Patient.findOne({ user: userId });
-const getTherapist = (userId) => Therapist.findOne({ user: userId });
+const getPatient = async (user) => {
+  if (user?.role === 'Patient') return ensurePatientProfile(user);
+  return Patient.findOne({ user: user?._id || user });
+};
+
+const getTherapist = async (user) => {
+  if (user?.role === 'Therapist') return ensureTherapistProfile(user);
+  return Therapist.findOne({ user: user?._id || user });
+};
 
 const populateSession = (query) => query
   .populate('exercise', 'name duration reps targetBodyPart')
@@ -12,7 +21,7 @@ const populateSession = (query) => query
 export const startSession = async (req, res) => {
   try {
     const { exerciseId, planId } = req.body;
-    const patient = await getPatient(req.user._id);
+    const patient = await getPatient(req.user);
     const plan = await ExercisePlan.findOne({ _id: planId, patient: patient?._id, status: { $in: ['Active', 'Paused'] } }).populate('exercises.exercise');
     const assignment = plan?.exercises.find((item) => String(item.exercise?._id || item.exercise) === String(exerciseId));
     if (!patient || !plan || !assignment) return res.status(404).json({ message: 'Assigned exercise not found' });
@@ -37,7 +46,7 @@ export const startSession = async (req, res) => {
 
 export const getPatientSession = async (req, res) => {
   try {
-    const patient = await getPatient(req.user._id);
+    const patient = await getPatient(req.user);
     if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
     const session = await populateSession(MonitoringSession.findOne({ patient: patient._id, status: { $in: ['Active', 'Paused', 'Completed'] } }).sort({ updatedAt: -1 }));
     res.json(session || null);
@@ -48,7 +57,7 @@ export const getPatientSession = async (req, res) => {
 
 export const updatePatientSession = async (req, res) => {
   try {
-    const patient = await getPatient(req.user._id);
+    const patient = await getPatient(req.user);
     const { status, elapsedSeconds, currentReps, painLevel, mobilityScore } = req.body;
     const update = {
       ...(status ? { status } : {}),
@@ -96,10 +105,13 @@ export const updatePatientSession = async (req, res) => {
 
 export const getTherapistSessions = async (req, res) => {
   try {
-    const therapist = await getTherapist(req.user._id);
+    const therapist = await getTherapist(req.user);
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
     const sessions = await populateSession(MonitoringSession.find({ status: { $in: ['Active', 'Paused'] } }).sort({ updatedAt: -1 }));
-    const assignedIds = new Set(therapist.patientsAssigned.map((id) => String(id)));
+    const assignedPatients = await Patient.find({
+      $or: [{ assignedTherapist: therapist._id }, { _id: { $in: therapist.patientsAssigned || [] } }],
+    }).select('_id');
+    const assignedIds = new Set(assignedPatients.map((p) => String(p._id)));
     res.json(sessions.filter((session) => assignedIds.has(String(session.patient?._id))));
   } catch (error) {
     res.status(500).json({ message: 'Unable to load live monitoring sessions' });

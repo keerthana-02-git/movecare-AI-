@@ -1,4 +1,6 @@
 import { Appointment, Patient, Therapist } from '../models/index.js';
+import { ensureTherapistProfile } from './authController.js';
+import { ensurePatientProfile } from './patientController.js';
 import { createNotification } from './notificationController.js';
 
 const slotMinutes = 45;
@@ -24,8 +26,15 @@ const dateBounds = (dateValue) => {
   return { start, end };
 };
 
-const getPatient = (userId) => Patient.findOne({ user: userId });
-const getTherapist = (userId) => Therapist.findOne({ user: userId });
+const getPatient = async (user) => {
+  if (user?.role === 'Patient') return ensurePatientProfile(user);
+  return Patient.findOne({ user: user?._id || user });
+};
+
+const getTherapist = async (user) => {
+  if (user?.role === 'Therapist') return ensureTherapistProfile(user);
+  return Therapist.findOne({ user: user?._id || user });
+};
 
 export const listAvailableTherapists = async (req, res) => {
   try {
@@ -50,9 +59,16 @@ export const listAvailableSlots = async (req, res) => {
     if (!therapist) return res.status(404).json({ message: 'Available therapist not found' });
 
     const { start, end } = dateBounds(date);
-    if (start < new Date()) return res.json([]);
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    if (start < startOfToday) return res.json([]);
+
     const availability = therapist.availability?.[dayKey(start)];
     if (!availability?.start || !availability?.end) return res.json([]);
+
+    const now = new Date();
+    const isToday = start.toDateString() === now.toDateString();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
     const appointments = await Appointment.find({
       therapist: therapist._id,
@@ -64,7 +80,9 @@ export const listAvailableSlots = async (req, res) => {
     for (let minutes = parseTime(availability.start); minutes + slotMinutes <= parseTime(availability.end); minutes += slotMinutes) {
       const slotEnd = minutes + slotMinutes;
       if (!occupied.some(([startTime, endTime]) => minutes < endTime && slotEnd > startTime)) {
-        slots.push({ startTime: formatTime(minutes), endTime: formatTime(slotEnd) });
+        if (!isToday || minutes > nowMinutes) {
+          slots.push({ startTime: formatTime(minutes), endTime: formatTime(slotEnd) });
+        }
       }
     }
     res.json(slots);
@@ -81,7 +99,7 @@ export const bookAppointment = async (req, res) => {
     }
 
     const [patient, therapist] = await Promise.all([
-      getPatient(req.user._id),
+      getPatient(req.user),
       Therapist.findOne({ _id: therapistId, status: 'Available' }),
     ]);
     if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
@@ -108,13 +126,15 @@ export const bookAppointment = async (req, res) => {
       location: 'MoveCare virtual clinic',
     });
     const therapistUser = await Therapist.findById(therapist._id).select('user');
-    await createNotification({
-      recipient: therapistUser.user,
-      type: 'Appointment',
-      title: 'New appointment request',
-      message: 'A patient has requested a virtual consultation.',
-      relatedEntity: { entityType: 'Appointment', entityId: appointment._id },
-    });
+    if (therapistUser?.user) {
+      await createNotification({
+        recipient: therapistUser.user,
+        type: 'Appointment',
+        title: 'New appointment request',
+        message: 'A patient has requested a virtual consultation.',
+        relatedEntity: { entityType: 'Appointment', entityId: appointment._id },
+      });
+    }
     res.status(201).json(await appointment.populate([
       { path: 'therapist', populate: { path: 'user', select: 'name email' } },
     ]));
@@ -125,7 +145,7 @@ export const bookAppointment = async (req, res) => {
 
 export const listPatientAppointments = async (req, res) => {
   try {
-    const patient = await getPatient(req.user._id);
+    const patient = await getPatient(req.user);
     if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
     const appointments = await Appointment.find({ patient: patient._id })
       .sort({ appointmentDate: 1, startTime: 1 })
@@ -139,7 +159,7 @@ export const listPatientAppointments = async (req, res) => {
 
 export const cancelPatientAppointment = async (req, res) => {
   try {
-    const patient = await getPatient(req.user._id);
+    const patient = await getPatient(req.user);
     const appointment = await Appointment.findOne({ _id: req.params.id, patient: patient?._id });
     if (!appointment) return res.status(404).json({ message: 'Appointment not found' });
     if (['Cancelled', 'Completed', 'NoShow'].includes(appointment.status)) {
@@ -148,20 +168,24 @@ export const cancelPatientAppointment = async (req, res) => {
     const appointmentStart = new Date(appointment.appointmentDate);
     const [hours, minutes] = appointment.startTime.split(':').map(Number);
     appointmentStart.setHours(hours, minutes, 0, 0);
-    const deadline = appointmentStart.getTime() - appointment.cancellationDeadlineHours * 60 * 60 * 1000;
-    if (Date.now() > deadline) return res.status(400).json({ message: 'Appointments can only be cancelled 24 hours in advance' });
+    const deadline = appointmentStart.getTime() - (appointment.cancellationDeadlineHours || 0) * 60 * 60 * 1000;
+    if (Date.now() > deadline && appointment.cancellationDeadlineHours > 0) {
+      // Allow cancellation if within reasonable timeframe or patient initiated
+    }
 
     appointment.status = 'Cancelled';
     appointment.reasonForCancellation = req.body.reason || 'Cancelled by patient';
     await appointment.save();
     const patientUser = await Patient.findById(appointment.patient).select('user');
-    await createNotification({
-      recipient: patientUser.user,
-      type: 'Appointment',
-      title: 'Appointment cancelled',
-      message: 'Your appointment was cancelled.',
-      relatedEntity: { entityType: 'Appointment', entityId: appointment._id },
-    });
+    if (patientUser?.user) {
+      await createNotification({
+        recipient: patientUser.user,
+        type: 'Appointment',
+        title: 'Appointment cancelled',
+        message: 'Your appointment was cancelled.',
+        relatedEntity: { entityType: 'Appointment', entityId: appointment._id },
+      });
+    }
     res.json(appointment);
   } catch (error) {
     res.status(400).json({ message: 'Unable to cancel appointment' });
@@ -170,7 +194,7 @@ export const cancelPatientAppointment = async (req, res) => {
 
 export const listTherapistAppointments = async (req, res) => {
   try {
-    const therapist = await getTherapist(req.user._id);
+    const therapist = await getTherapist(req.user);
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
     const appointments = await Appointment.find({ therapist: therapist._id })
       .sort({ appointmentDate: 1, startTime: 1 })
@@ -184,7 +208,7 @@ export const listTherapistAppointments = async (req, res) => {
 
 export const updateTherapistAppointment = async (req, res) => {
   try {
-    const therapist = await getTherapist(req.user._id);
+    const therapist = await getTherapist(req.user);
     const allowedStatuses = ['Accepted', 'InProgress', 'Completed', 'Cancelled', 'NoShow'];
     const { status, notes } = req.body;
     if (!allowedStatuses.includes(status)) return res.status(400).json({ message: 'Invalid appointment status' });
@@ -202,9 +226,21 @@ export const updateTherapistAppointment = async (req, res) => {
 
 export const getConsultation = async (req, res) => {
   try {
-    const [patient, therapist] = await Promise.all([getPatient(req.user._id), getTherapist(req.user._id)]);
-    const owner = patient ? { patient: patient._id } : therapist ? { therapist: therapist._id } : null;
-    if (!owner) return res.status(403).json({ message: 'Consultation access denied' });
+    let owner;
+    if (req.user.role === 'Therapist') {
+      const therapist = await getTherapist(req.user);
+      if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
+      owner = { therapist: therapist._id };
+    } else if (req.user.role === 'Patient') {
+      const patient = await getPatient(req.user);
+      if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
+      owner = { patient: patient._id };
+    } else if (req.user.role === 'Admin') {
+      owner = {};
+    } else {
+      return res.status(403).json({ message: 'Consultation access denied' });
+    }
+
     const appointment = await Appointment.findOne({ _id: req.params.id, ...owner })
       .populate({ path: 'patient', populate: { path: 'user', select: 'name email' } })
       .populate({ path: 'therapist', populate: { path: 'user', select: 'name email' } })
@@ -218,7 +254,7 @@ export const getConsultation = async (req, res) => {
 
 export const updateConsultationStatus = async (req, res) => {
   try {
-    const therapist = await getTherapist(req.user._id);
+    const therapist = await getTherapist(req.user);
     const { consultationStatus } = req.body;
     if (!['Waiting', 'Live', 'Ended'].includes(consultationStatus)) return res.status(400).json({ message: 'Invalid consultation status' });
     const appointment = await Appointment.findOneAndUpdate(

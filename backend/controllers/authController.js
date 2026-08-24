@@ -1,8 +1,40 @@
 import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
+import { Patient, Therapist, User } from '../models/index.js';
 
 const generateToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+export const createPatientProfile = (user, profile = {}) => Patient.create({
+  user: user._id,
+  dateOfBirth: profile.dateOfBirth || new Date('1970-01-01'),
+  gender: profile.gender || 'Other',
+  medicalCondition: profile.medicalCondition || 'Profile setup required',
+  injuryDescription: profile.injuryDescription || '',
+});
+
+export const createTherapistProfile = (user, profile = {}) => Therapist.create({
+  user: user._id,
+  licenseNumber: profile.licenseNumber || `PT-${user._id.toString().slice(-6).toUpperCase()}`,
+  specialization: profile.specialization || 'Physical Therapy',
+  yearsOfExperience: profile.yearsOfExperience !== undefined ? Number(profile.yearsOfExperience) : 5,
+  status: profile.status || 'Available',
+  availability: profile.availability || {
+    monday: { start: '09:00', end: '17:00' },
+    tuesday: { start: '09:00', end: '17:00' },
+    wednesday: { start: '09:00', end: '17:00' },
+    thursday: { start: '09:00', end: '17:00' },
+    friday: { start: '09:00', end: '17:00' },
+    saturday: { start: '10:00', end: '14:00' },
+  },
+  patientsAssigned: profile.patientsAssigned || [],
+});
+
+export const ensureTherapistProfile = async (user) => {
+  const existingProfile = await Therapist.findOne({ user: user._id });
+  if (existingProfile) return existingProfile;
+
+  return createTherapistProfile(user);
+};
 
 export const registerUser = async (req, res) => {
   try {
@@ -21,12 +53,27 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ message: 'User already exists with this email' });
     }
 
+    const requestedRole = ['Patient', 'Therapist', 'Admin'].includes(req.body.role)
+      ? req.body.role
+      : 'Patient';
+
     const user = await User.create({
       name: String(name).trim(),
       email: normalizedEmail,
       password,
-      role: 'Patient',
+      role: requestedRole,
     });
+
+    try {
+      if (requestedRole === 'Patient') {
+        await createPatientProfile(user, req.body);
+      } else if (requestedRole === 'Therapist') {
+        await createTherapistProfile(user, req.body);
+      }
+    } catch (profileError) {
+      await User.deleteOne({ _id: user._id });
+      throw profileError;
+    }
 
     res.status(201).json({
       message: 'User registered successfully',

@@ -5,9 +5,16 @@ import {
   Progress,
   Therapist,
 } from '../models/index.js';
+import { ensureTherapistProfile } from './authController.js';
+import { ensurePatientProfile } from './patientController.js';
 import { createNotification } from './notificationController.js';
 
-const getTherapist = (userId) => Therapist.findOne({ user: userId });
+const getTherapist = async (user) => {
+  if (user?.role === 'Therapist') {
+    return ensureTherapistProfile(user);
+  }
+  return Therapist.findOne({ user: user?._id || user });
+};
 
 const exerciseFields = [
   'name',
@@ -33,7 +40,7 @@ const pickExerciseFields = (body) =>
 
 export const listExercises = async (req, res) => {
   try {
-    const therapist = await getTherapist(req.user._id);
+    const therapist = await getTherapist(req.user);
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
 
     const exercises = await Exercise.find({ createdBy: therapist._id }).sort({ updatedAt: -1 }).lean();
@@ -45,7 +52,7 @@ export const listExercises = async (req, res) => {
 
 export const createExercise = async (req, res) => {
   try {
-    const therapist = await getTherapist(req.user._id);
+    const therapist = await getTherapist(req.user);
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
 
     const exercise = await Exercise.create({ ...pickExerciseFields(req.body), createdBy: therapist._id });
@@ -57,7 +64,7 @@ export const createExercise = async (req, res) => {
 
 export const updateExercise = async (req, res) => {
   try {
-    const therapist = await getTherapist(req.user._id);
+    const therapist = await getTherapist(req.user);
     const exercise = await Exercise.findOneAndUpdate(
       { _id: req.params.id, createdBy: therapist?._id },
       pickExerciseFields(req.body),
@@ -72,7 +79,7 @@ export const updateExercise = async (req, res) => {
 
 export const deleteExercise = async (req, res) => {
   try {
-    const therapist = await getTherapist(req.user._id);
+    const therapist = await getTherapist(req.user);
     const exercise = await Exercise.findOneAndDelete({ _id: req.params.id, createdBy: therapist?._id });
     if (!exercise) return res.status(404).json({ message: 'Exercise not found' });
 
@@ -88,11 +95,18 @@ export const deleteExercise = async (req, res) => {
 
 export const listAssignmentOptions = async (req, res) => {
   try {
-    const therapist = await getTherapist(req.user._id);
+    const therapist = await getTherapist(req.user);
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
 
     const [patients, exercises] = await Promise.all([
-      Patient.find({ assignedTherapist: therapist._id }).populate('user', 'name email').sort({ createdAt: -1 }).lean(),
+      Patient.find({
+        $or: [
+          { assignedTherapist: therapist._id },
+          { _id: { $in: therapist.patientsAssigned || [] } },
+          { assignedTherapist: { $exists: false } },
+          { assignedTherapist: null },
+        ],
+      }).populate('user', 'name email').sort({ createdAt: -1 }).lean(),
       Exercise.find({ createdBy: therapist._id }).sort({ name: 1 }).lean(),
     ]);
     res.json({ patients, exercises });
@@ -108,12 +122,23 @@ export const assignExercise = async (req, res) => {
       return res.status(400).json({ message: 'Patient, exercise, plan name, start date and end date are required' });
     }
 
-    const therapist = await getTherapist(req.user._id);
+    const therapist = await getTherapist(req.user);
+    if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
+
     const [patient, exercise] = await Promise.all([
-      Patient.findOne({ _id: patientId, assignedTherapist: therapist?._id }),
-      Exercise.findOne({ _id: exerciseId, createdBy: therapist?._id }),
+      Patient.findById(patientId),
+      Exercise.findOne({ _id: exerciseId, createdBy: therapist._id }),
     ]);
     if (!patient || !exercise) return res.status(404).json({ message: 'Patient or exercise not found' });
+
+    if (!patient.assignedTherapist || String(patient.assignedTherapist) !== String(therapist._id)) {
+      patient.assignedTherapist = therapist._id;
+      await patient.save();
+    }
+    if (!therapist.patientsAssigned.some((id) => String(id) === String(patient._id))) {
+      therapist.patientsAssigned.push(patient._id);
+      await therapist.save();
+    }
 
     const plan = await ExercisePlan.create({
       patient: patient._id,
@@ -141,7 +166,7 @@ export const assignExercise = async (req, res) => {
 
 export const getPatientExercises = async (req, res) => {
   try {
-    const patient = await Patient.findOne({ user: req.user._id });
+    const patient = await ensurePatientProfile(req.user);
     if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
 
     const plans = await ExercisePlan.find({ patient: patient._id, status: { $in: ['Active', 'Paused'] } })
@@ -158,9 +183,9 @@ export const getPatientExercises = async (req, res) => {
 export const completePatientExercise = async (req, res) => {
   try {
     const { planId, painLevel, mobilityScore, notes } = req.body;
-    const patient = await Patient.findOne({ user: req.user._id });
+    const patient = await ensurePatientProfile(req.user);
     const plan = await ExercisePlan.findOne({ _id: planId, patient: patient?._id, status: { $in: ['Active', 'Paused'] } });
-    if (!plan || !plan.exercises.some((item) => String(item.exercise) === req.params.exerciseId)) {
+    if (!plan || !plan.exercises.some((item) => String(item.exercise?._id || item.exercise) === String(req.params.exerciseId))) {
       return res.status(404).json({ message: 'Assigned exercise not found' });
     }
 
@@ -173,10 +198,10 @@ export const completePatientExercise = async (req, res) => {
       mobilityScore: mobilityScore === '' || mobilityScore === undefined ? undefined : Number(mobilityScore),
       notes,
     });
-    const therapist = await ExercisePlan.findById(plan._id).populate({ path: 'therapist', select: 'user' });
-    if (therapist?.therapist?.user) {
+    const populatedPlan = await ExercisePlan.findById(plan._id).populate({ path: 'therapist', select: 'user' });
+    if (populatedPlan?.therapist?.user) {
       await createNotification({
-        recipient: therapist.therapist.user,
+        recipient: populatedPlan.therapist.user,
         type: 'ProgressUpdate',
         title: 'Exercise completed',
         message: 'A patient completed an assigned exercise and recorded a new progress update.',

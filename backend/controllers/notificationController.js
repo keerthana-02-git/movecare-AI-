@@ -1,4 +1,5 @@
 import { Notification, Patient, Therapist } from '../models/index.js';
+import { ensureTherapistProfile } from './authController.js';
 
 export const createNotification = (data) => Notification.create(data);
 
@@ -48,13 +49,17 @@ export const createTherapistMessage = async (req, res) => {
     if (!['Message', 'ExerciseReminder'].includes(type)) {
       return res.status(400).json({ message: 'Only messages and exercise reminders can be sent here' });
     }
-    const therapist = await Therapist.findOne({ user: req.user._id });
-    const patient = await Patient.findOne({ _id: patientId, assignedTherapist: therapist?._id }).populate('user', 'name');
+    const therapist = await ensureTherapistProfile(req.user);
+    const patient = await Patient.findOne({
+      _id: patientId,
+      $or: [{ assignedTherapist: therapist?._id }, { _id: { $in: therapist?.patientsAssigned || [] } }],
+    }).populate('user', 'name');
     if (!patient) return res.status(404).json({ message: 'Patient not found for this therapist' });
     if (!title || !message) return res.status(400).json({ message: 'Title and message are required' });
 
+    const recipientId = patient.user?._id || patient.user;
     const notification = await createNotification({
-      recipient: patient.user._id,
+      recipient: recipientId,
       type,
       title,
       message,

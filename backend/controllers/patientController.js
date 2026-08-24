@@ -6,20 +6,33 @@ import {
   Progress,
 } from '../models/index.js';
 
+export const ensurePatientProfile = async (user) => {
+  const existingProfile = await Patient.findOne({ user: user._id || user });
+  if (existingProfile) return existingProfile;
+
+  return Patient.create({
+    user: user._id || user,
+    dateOfBirth: new Date('1970-01-01'),
+    gender: 'Other',
+    medicalCondition: 'Profile setup required',
+    injuryDescription: '',
+  });
+};
+
 export const getPatientDashboard = async (req, res) => {
   try {
-    const patient = await Patient.findOne({ user: req.user._id })
-      .populate({
-        path: 'assignedTherapist',
-        populate: { path: 'user', select: 'name email' },
-      })
-      .lean();
+    const patientProfile = await ensurePatientProfile(req.user);
+    const patient = await patientProfile.populate({
+      path: 'assignedTherapist',
+      populate: { path: 'user', select: 'name email' },
+    });
 
     if (!patient) {
       return res.status(404).json({ message: 'Patient profile not found' });
     }
 
     const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const [plans, appointments, progress, notifications] = await Promise.all([
       ExercisePlan.find({ patient: patient._id, status: { $in: ['Active', 'Paused'] } })
         .sort({ startDate: -1 })
@@ -28,7 +41,7 @@ export const getPatientDashboard = async (req, res) => {
         .lean(),
       Appointment.find({
         patient: patient._id,
-        appointmentDate: { $gte: now },
+        appointmentDate: { $gte: startOfToday },
         status: { $nin: ['Cancelled', 'NoShow'] },
       })
         .sort({ appointmentDate: 1 })

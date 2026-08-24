@@ -56,6 +56,39 @@ export const updateUserRole = async (req, res) => {
     }
     const user = await User.findByIdAndUpdate(req.params.id, { role }, { new: true, runValidators: true }).select('name email role createdAt');
     if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (role === 'Therapist') {
+      const existingTherapist = await Therapist.findOne({ user: user._id });
+      if (!existingTherapist) {
+        await Therapist.create({
+          user: user._id,
+          licenseNumber: `PT-${user._id.toString().slice(-6).toUpperCase()}`,
+          specialization: 'Physical Therapy',
+          yearsOfExperience: 5,
+          status: 'Available',
+          availability: {
+            monday: { start: '09:00', end: '17:00' },
+            tuesday: { start: '09:00', end: '17:00' },
+            wednesday: { start: '09:00', end: '17:00' },
+            thursday: { start: '09:00', end: '17:00' },
+            friday: { start: '09:00', end: '17:00' },
+            saturday: { start: '10:00', end: '14:00' },
+          },
+        });
+      }
+    } else if (role === 'Patient') {
+      const existingPatient = await Patient.findOne({ user: user._id });
+      if (!existingPatient) {
+        await Patient.create({
+          user: user._id,
+          dateOfBirth: new Date('1970-01-01'),
+          gender: 'Other',
+          medicalCondition: 'Profile setup required',
+          injuryDescription: '',
+        });
+      }
+    }
+
     res.json(user);
   } catch (error) {
     res.status(400).json({ message: error.message || 'Unable to update user' });
