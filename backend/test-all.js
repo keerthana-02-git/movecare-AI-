@@ -165,7 +165,7 @@ async function testAll() {
   await User.findByIdAndUpdate(therapistUser.id, { role: 'Therapist' });
   const createdTherapist = await Therapist.create({
     user: therapistUser.id,
-    licenseNumber: 'PT-TEST-999',
+    licenseNumber: `PT-TEST-${Date.now().toString().slice(-6)}`,
     specialization: 'Physical Therapy',
     yearsOfExperience: 10,
     status: 'Available',

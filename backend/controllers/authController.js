@@ -7,17 +7,17 @@ const generateToken = (id) =>
 export const createPatientProfile = (user, profile = {}) => Patient.create({
   user: user._id,
   dateOfBirth: profile.dateOfBirth || new Date('1970-01-01'),
-  gender: profile.gender || 'Other',
+  gender: ['Male', 'Female', 'Other'].includes(profile.gender) ? profile.gender : 'Other',
   medicalCondition: profile.medicalCondition || 'Profile setup required',
   injuryDescription: profile.injuryDescription || '',
 });
 
 export const createTherapistProfile = (user, profile = {}) => Therapist.create({
   user: user._id,
-  licenseNumber: profile.licenseNumber || `PT-${user._id.toString().slice(-6).toUpperCase()}`,
-  specialization: profile.specialization || 'Physical Therapy',
-  yearsOfExperience: profile.yearsOfExperience !== undefined ? Number(profile.yearsOfExperience) : 5,
-  status: profile.status || 'Available',
+  licenseNumber: profile.licenseNumber || `PT-${user._id.toString().slice(-6).toUpperCase()}-${Date.now().toString().slice(-4)}`,
+  specialization: ['Physical Therapy', 'Occupational Therapy', 'Speech Therapy', 'General'].includes(profile.specialization) ? profile.specialization : 'Physical Therapy',
+  yearsOfExperience: profile.yearsOfExperience !== undefined && !isNaN(Number(profile.yearsOfExperience)) ? Math.max(0, Number(profile.yearsOfExperience)) : 5,
+  status: ['Available', 'Unavailable', 'OnLeave'].includes(profile.status) ? profile.status : 'Available',
   availability: profile.availability || {
     monday: { start: '09:00', end: '17:00' },
     tuesday: { start: '09:00', end: '17:00' },
@@ -86,7 +86,11 @@ export const registerUser = async (req, res) => {
       token: generateToken(user._id),
     });
   } catch (error) {
-    res.status(error.name === 'ValidationError' ? 400 : 500).json({ message: error.name === 'ValidationError' ? error.message : 'Registration failed' });
+    if (error.code === 11000) {
+      return res.status(400).json({ message: 'User already exists with this email' });
+    }
+    const message = error.name === 'ValidationError' ? error.message : (error.message || 'Registration failed');
+    res.status(error.name === 'ValidationError' ? 400 : 500).json({ message });
   }
 };
 
@@ -193,32 +197,53 @@ export const verifyGoogleToken = async (credential) => {
     }
   }
 
+  // 1. Try Google ID token verification
   try {
     const response = await fetch(
       `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`
     );
-    if (!response.ok) return null;
+    if (response.ok) {
+      const payload = await response.json();
+      const isEmailVerified = payload.email_verified === true || payload.email_verified === 'true';
 
-    const payload = await response.json();
-    if (!payload.email) return null;
-
-    const isEmailVerified =
-      payload.email_verified === true || payload.email_verified === 'true';
-    if (!isEmailVerified) return null;
-
-    if (process.env.GOOGLE_CLIENT_ID && payload.aud !== process.env.GOOGLE_CLIENT_ID) {
-      return null;
+      if (payload.email && isEmailVerified) {
+        if (!process.env.GOOGLE_CLIENT_ID || payload.aud === process.env.GOOGLE_CLIENT_ID) {
+          return {
+            email: payload.email,
+            name: payload.name || payload.given_name || 'Google User',
+            sub: payload.sub,
+            email_verified: true,
+          };
+        }
+      }
     }
-
-    return {
-      email: payload.email,
-      name: payload.name || payload.given_name || 'Google User',
-      sub: payload.sub,
-      email_verified: isEmailVerified,
-    };
   } catch {
-    return null;
+    // Continue to access token check
   }
+
+  // 2. Try Google Access Token verification via userinfo endpoint
+  try {
+    const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${credential}` },
+    });
+    if (userRes.ok) {
+      const payload = await userRes.json();
+      const isEmailVerified = payload.email_verified === true || payload.email_verified === 'true';
+
+      if (payload.email && isEmailVerified) {
+        return {
+          email: payload.email,
+          name: payload.name || payload.given_name || 'Google User',
+          sub: payload.sub,
+          email_verified: true,
+        };
+      }
+    }
+  } catch {
+    // Access token verification failed
+  }
+
+  return null;
 };
 
 export const googleAuth = async (req, res) => {
@@ -291,6 +316,79 @@ export const googleAuth = async (req, res) => {
   }
 };
 
+export const getGoogleAuthUrl = (req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    return res.status(400).json({ message: 'GOOGLE_CLIENT_ID is not configured in backend environment.' });
+  }
+
+  const redirectUri = req.query.redirectUri || `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+  const scope = encodeURIComponent('openid email profile');
+  const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&access_type=offline&prompt=select_account`;
+
+  res.json({ url: googleAuthUrl });
+};
+
+export const googleCallback = async (req, res) => {
+  const { code, error } = req.query;
+  const clientOrigin = process.env.CLIENT_ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
+
+  if (error || !code) {
+    const errorMsg = error || 'Google sign-in was cancelled or failed.';
+    return res.redirect(`${clientOrigin}/login?error=${encodeURIComponent(errorMsg)}`);
+  }
+
+  try {
+    const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+    const verified = await exchangeGoogleCode(code, redirectUri);
+
+    if (!verified || !verified.email) {
+      return res.redirect(`${clientOrigin}/login?error=${encodeURIComponent('Invalid or expired Google authorization.')}`);
+    }
+
+    const normalizedEmail = String(verified.email).trim().toLowerCase();
+    let user = await User.findOne({ email: normalizedEmail });
+
+    if (user) {
+      if (!user.googleId && verified.sub) {
+        user.googleId = verified.sub;
+        await user.save();
+      }
+      if (user.role === 'Patient') {
+        const existingPatient = await Patient.findOne({ user: user._id });
+        if (!existingPatient) {
+          await createPatientProfile(user, { medicalCondition: 'Registered via Google' });
+        }
+      }
+    } else {
+      user = await User.create({
+        name: verified.name || 'Google User',
+        email: normalizedEmail,
+        googleId: verified.sub,
+        authProvider: 'google',
+        role: 'Patient',
+      });
+      await createPatientProfile(user, { medicalCondition: 'Registered via Google' });
+    }
+
+    const token = generateToken(user._id);
+    const userPayload = {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    };
+
+    return res.redirect(
+      `${clientOrigin}/auth/google/callback?token=${token}&user=${encodeURIComponent(JSON.stringify(userPayload))}`
+    );
+  } catch (err) {
+    return res.redirect(
+      `${clientOrigin}/login?error=${encodeURIComponent(err.message || 'Google authentication failed.')}`
+    );
+  }
+};
+
 export const logoutUser = (req, res) => {
   res.json({ message: 'Logout successful. Please discard the token on the client side.' });
 };
@@ -303,3 +401,4 @@ export const getMe = async (req, res) => {
     role: req.user.role,
   });
 };
+

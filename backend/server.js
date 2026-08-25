@@ -37,7 +37,23 @@ if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process
   throw new Error('JWT_SECRET must be at least 32 characters in production');
 }
 
-app.use(cors({ origin: allowedOrigins, credentials: false }));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (
+        /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+        allowedOrigins.includes(origin)
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
+    credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
 app.use(express.json({ limit: '100kb' }));
 
 app.get('/api/health', (req, res) => {
@@ -57,7 +73,7 @@ app.use('/api/admin', adminRoutes);
 const startServer = async (port = PORT) => {
   await connectDB();
   return new Promise((resolve) => {
-    const server = app.listen(port, () => {
+    const server = app.listen(port, '0.0.0.0', () => {
       console.log(`Backend running on http://localhost:${port}`);
       resolve(server);
     });

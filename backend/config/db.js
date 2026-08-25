@@ -39,18 +39,16 @@ const connectDB = async () => {
     console.log(`MongoDB connected: ${conn.connection.host}`);
     return conn;
   } catch (error) {
-    const isConnectionRefused =
-      error?.code === 'ECONNREFUSED' ||
-      error?.message?.includes('ECONNREFUSED') ||
-      error?.message?.includes('failed to connect to server');
+    console.error('Primary MongoDB connection failed:', sanitizeError(error));
 
-    if (!process.env.MONGODB_URI && isConnectionRefused && process.env.NODE_ENV !== 'production') {
+    if (process.env.NODE_ENV !== 'production') {
       try {
+        console.log('Falling back to in-memory MongoDB for local development...');
         memoryServer = await MongoMemoryServer.create();
         const memoryUri = memoryServer.getUri();
         process.env.MONGODB_URI = memoryUri;
         const conn = await mongoose.connect(memoryUri);
-        console.log(`MongoDB connected (memory server): ${conn.connection.host}`);
+        console.log(`MongoDB connected (memory server fallback): ${conn.connection.host}`);
         return conn;
       } catch (memoryError) {
         console.error('Memory MongoDB fallback failed:', sanitizeError(memoryError));
@@ -58,7 +56,6 @@ const connectDB = async () => {
       }
     }
 
-    console.error('MongoDB connection failed:', sanitizeError(error));
     process.exit(1);
   }
 };

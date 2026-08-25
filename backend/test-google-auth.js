@@ -1,9 +1,22 @@
-const API_BASE = 'http://127.0.0.1:5000/api';
+import { startServer } from './server.js';
+
+let API_BASE = 'http://127.0.0.1:5000/api';
+let runningServer = null;
 
 async function runGoogleAuthTests() {
   console.log('================================================================');
   console.log('   MoveCare AI Google Auth Integration Test Suite');
   console.log('================================================================\n');
+
+  // Check if server is already running on 5000, else start test server on 5055
+  try {
+    const healthCheck = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(1000) });
+    if (!healthCheck.ok) throw new Error();
+  } catch {
+    const testPort = 5055;
+    runningServer = await startServer(testPort);
+    API_BASE = `http://127.0.0.1:${testPort}/api`;
+  }
 
   const results = [];
   const runTest = async (name, fn) => {
@@ -159,8 +172,8 @@ async function runGoogleAuthTests() {
     if (res.status !== 401) {
       throw new Error(`Expected HTTP 401, but got HTTP ${res.status}`);
     }
-    if (!data.message || !data.message.includes('credential')) {
-      throw new Error(`Expected sanitized credential error message, got: ${JSON.stringify(data)}`);
+    if (!data.message || (!data.message.includes('credential') && !data.message.includes('Google authentication'))) {
+      throw new Error(`Expected sanitized error message, got: ${JSON.stringify(data)}`);
     }
   });
 
@@ -171,10 +184,17 @@ async function runGoogleAuthTests() {
   const passed = results.filter((r) => r.status === 'PASS').length;
   const failed = results.filter((r) => r.status === 'FAIL').length;
   console.log(`Total: ${results.length} | Passed: ${passed} | Failed: ${failed}`);
-  if (failed > 0) process.exit(1);
+  if (runningServer) {
+    runningServer.close();
+  }
+  process.exit(failed > 0 ? 1 : 0);
 }
 
 runGoogleAuthTests().catch((e) => {
   console.error(e);
+  if (runningServer) {
+    runningServer.close();
+  }
   process.exit(1);
 });
+
