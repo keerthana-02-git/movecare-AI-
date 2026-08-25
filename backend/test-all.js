@@ -4,7 +4,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { User, Patient, Therapist, Exercise, ExercisePlan, Appointment, Progress, Notification, MonitoringSession } from './models/index.js';
 
-dotenv.config({ path: path.resolve('..', '.env') });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 const API_BASE = 'http://127.0.0.1:5000/api';
 

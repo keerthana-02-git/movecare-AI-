@@ -4,7 +4,21 @@
  */
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { User, Patient, Therapist, Exercise, ExercisePlan, Appointment, Progress, Notification } from './models/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+
+const sanitizeError = (err) => {
+  if (!err) return '';
+  const message = err.message || String(err);
+  return message.replace(/:\/\/([^:]+):([^@]+)@/g, '://<credentials>@');
+};
 
 const verifyConnection = async () => {
   let memoryServer;
@@ -55,7 +69,7 @@ const verifyConnection = async () => {
 
     process.exit(0);
   } catch (error) {
-    console.error('\n❌ Connection failed:', error.message);
+    console.error('\n❌ Connection failed:', sanitizeError(error));
     if (memoryServer) {
       await memoryServer.stop();
     }

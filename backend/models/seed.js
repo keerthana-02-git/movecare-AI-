@@ -1,5 +1,8 @@
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import User from './User.js';
 import Patient from './Patient.js';
 import Therapist from './Therapist.js';
@@ -9,6 +12,17 @@ import Appointment from './Appointment.js';
 import Progress from './Progress.js';
 import Notification from './Notification.js';
 import MonitoringSession from './MonitoringSession.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
+
+const sanitizeError = (err) => {
+  if (!err) return '';
+  const message = err.message || String(err);
+  return message.replace(/:\/\/([^:]+):([^@]+)@/g, '://<credentials>@');
+};
 
 /**
  * Seed database with sample data for development
@@ -335,7 +349,7 @@ const seedDatabase = async () => {
     
     process.exit(0);
   } catch (error) {
-    console.error('Seeding error:', error);
+    console.error('Seeding error:', sanitizeError(error));
     
     if (memoryServer) {
       await memoryServer.stop();
