@@ -442,7 +442,12 @@ function GoogleAuthButton({ onAuthComplete, onError, disabled }) {
               if (tokenResponse.error) {
                 setLoading(false)
                 if (tokenResponse.error !== 'popup_closed_by_user') {
-                  onError(`Google Sign-In failed: ${tokenResponse.error_description || tokenResponse.error}`)
+                  const desc = tokenResponse.error_description || tokenResponse.error
+                  if (desc.includes('origin_mismatch')) {
+                    onError(`Google OAuth Error (origin_mismatch): The current origin "${window.location.origin}" is not authorized for Client ID ${googleClientId} in Google Cloud Console. Please add "${window.location.origin}" under Authorized JavaScript Origins.`)
+                  } else {
+                    onError(`Google Sign-In failed: ${desc}`)
+                  }
                 }
                 return
               }
@@ -453,21 +458,15 @@ function GoogleAuthButton({ onAuthComplete, onError, disabled }) {
             error_callback: (error) => {
               setLoading(false)
               if (error?.type !== 'popup_closed') {
-                onError(error?.message || 'Google Sign-In was closed or interrupted.')
+                const msg = error?.message || 'Google Sign-In was closed or interrupted.'
+                if (msg.includes('origin_mismatch')) {
+                  onError(`Google OAuth Error (origin_mismatch): Origin "${window.location.origin}" must be listed under Authorized JavaScript Origins in Google Cloud Console.`)
+                } else {
+                  onError(msg)
+                }
               }
             },
           })
-
-          if (window.google?.accounts?.id) {
-            window.google.accounts.id.initialize({
-              client_id: googleClientId,
-              callback: async (res) => {
-                if (res?.credential) {
-                  await submitGoogleToken(res.credential)
-                }
-              },
-            })
-          }
         } catch (err) {
           console.warn('Google Identity Services initialization notice:', err)
         }
@@ -514,7 +513,12 @@ function GoogleAuthButton({ onAuthComplete, onError, disabled }) {
             if (tokenResponse.error) {
               setLoading(false)
               if (tokenResponse.error !== 'popup_closed_by_user') {
-                onError(`Google Sign-In failed: ${tokenResponse.error_description || tokenResponse.error}`)
+                const desc = tokenResponse.error_description || tokenResponse.error
+                if (desc.includes('origin_mismatch')) {
+                  onError(`Google OAuth Error (origin_mismatch): The current origin "${window.location.origin}" is not authorized for Client ID ${googleClientId} in Google Cloud Console. Please add "${window.location.origin}" under Authorized JavaScript Origins.`)
+                } else {
+                  onError(`Google Sign-In failed: ${desc}`)
+                }
               }
               return
             }
@@ -525,7 +529,12 @@ function GoogleAuthButton({ onAuthComplete, onError, disabled }) {
           error_callback: (error) => {
             setLoading(false)
             if (error?.type !== 'popup_closed') {
-              onError(error?.message || 'Google Sign-In was closed or interrupted.')
+              const msg = error?.message || 'Google Sign-In was closed or interrupted.'
+              if (msg.includes('origin_mismatch')) {
+                onError(`Google OAuth Error (origin_mismatch): Origin "${window.location.origin}" must be listed under Authorized JavaScript Origins in Google Cloud Console.`)
+              } else {
+                onError(msg)
+              }
             }
           },
         })
@@ -575,13 +584,109 @@ function GoogleAuthButton({ onAuthComplete, onError, disabled }) {
   )
 }
 
+function GoogleCallbackPage({ onAuthComplete }) {
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const token = searchParams.get('token')
+    const rawUser = searchParams.get('user')
+    const code = searchParams.get('code')
+    const err = searchParams.get('error')
+
+    if (err) {
+      setError(err)
+      return
+    }
+
+    if (token && rawUser) {
+      try {
+        const userObj = JSON.parse(decodeURIComponent(rawUser))
+        localStorage.setItem('movecare-token', token)
+        localStorage.setItem('movecare-user', JSON.stringify(userObj))
+        onAuthComplete(userObj)
+        navigate('/dashboard', { replace: true })
+        return
+      } catch {
+        setError('Failed to parse Google authentication details.')
+        return
+      }
+    }
+
+    if (code) {
+      const redirectUri = `${window.location.origin}/auth/google/callback`
+      fetch(`${API_BASE_URL}/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, redirectUri }),
+      })
+        .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok) throw new Error(data.message || 'Google authentication failed')
+          localStorage.setItem('movecare-token', data.token)
+          localStorage.setItem('movecare-user', JSON.stringify(data.user))
+          onAuthComplete(data.user)
+          navigate('/dashboard', { replace: true })
+        })
+        .catch((loadError) => {
+          setError(loadError.message || 'Google authorization exchange failed')
+        })
+      return
+    }
+
+    setError('Missing Google authentication response.')
+  }, [searchParams, navigate, onAuthComplete])
+
+  if (error) {
+    return (
+      <main className="page-shell">
+        <div className="container auth-wrap">
+          <div className="auth-card">
+            <div className="auth-header">
+              <span className="eyebrow accent">Google Sign-In</span>
+              <h2>Authentication Issue</h2>
+            </div>
+            <div className="form-error" role="alert">{error}</div>
+            <NavLink to="/login" className="primary-btn auth-button" style={{ textAlign: 'center', marginTop: '1rem' }}>
+              Return to Login
+            </NavLink>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  return (
+    <main className="page-shell">
+      <div className="container auth-wrap" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+        <div className="auth-card" style={{ display: 'grid', placeItems: 'center', gap: '1rem' }}>
+          <div className="google-btn-spinner" style={{ width: '32px', height: '32px', borderWidth: '3px' }} />
+          <h3>Connecting to MoveCare AI...</h3>
+          <p style={{ color: '#526d84', margin: 0 }}>Completing secure Google authentication</p>
+        </div>
+      </div>
+    </main>
+  )
+}
+
 function AuthPage({ mode, onAuthComplete }) {
   const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'Patient' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
 
   const isRegister = mode === 'register'
+
+  useEffect(() => {
+    const urlError = searchParams.get('error')
+    if (urlError) {
+      setError(decodeURIComponent(urlError))
+    } else {
+      setError('')
+    }
+  }, [mode, searchParams])
 
   const handleChange = (event) => {
     const { name, value } = event.target
@@ -592,17 +697,21 @@ function AuthPage({ mode, onAuthComplete }) {
     event.preventDefault()
     setError('')
 
-    if (isRegister && !formData.name.trim()) {
+    const name = formData.name.trim()
+    const email = formData.email.trim().toLowerCase()
+    const password = formData.password
+
+    if (isRegister && !name) {
       setError('Name is required.')
       return
     }
 
-    if (!formData.email.trim() || !formData.password.trim()) {
+    if (!email || !password) {
       setError('Email and password are required.')
       return
     }
 
-    if (formData.password.length < 6) {
+    if (password.length < 6) {
       setError('Password must be at least 6 characters long.')
       return
     }
@@ -610,16 +719,25 @@ function AuthPage({ mode, onAuthComplete }) {
     setLoading(true)
 
     try {
+      const payload = isRegister
+        ? { name, email, password, role: formData.role || 'Patient' }
+        : { email, password }
+
       const response = await fetch(`${API_BASE_URL}/auth/${isRegister ? 'register' : 'login'}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       })
 
-      const data = await response.json()
+      let data = {}
+      try {
+        data = await response.json()
+      } catch {
+        data = {}
+      }
 
       if (!response.ok) {
-        throw new Error(data.message || 'Authentication failed')
+        throw new Error(data.message || (isRegister ? 'Registration failed. Please check your information.' : 'Invalid email or password.'))
       }
 
       localStorage.setItem('movecare-token', data.token)
@@ -627,7 +745,11 @@ function AuthPage({ mode, onAuthComplete }) {
       onAuthComplete(data.user)
       navigate('/dashboard')
     } catch (submittedError) {
-      setError(submittedError.message)
+      if (submittedError.name === 'TypeError' && (submittedError.message === 'Failed to fetch' || submittedError.message?.includes('fetch') || submittedError.message?.includes('NetworkError'))) {
+        setError(`Unable to reach backend server at ${API_BASE_URL}. Please ensure the server is running on port 5000.`)
+      } else {
+        setError(submittedError.message || 'Authentication failed')
+      }
     } finally {
       setLoading(false)
     }
@@ -1413,6 +1535,7 @@ function App() {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/login" element={<AuthPage mode="login" onAuthComplete={handleAuthComplete} />} />
           <Route path="/register" element={<AuthPage mode="register" onAuthComplete={handleAuthComplete} />} />
+          <Route path="/auth/google/callback" element={<GoogleCallbackPage onAuthComplete={handleAuthComplete} />} />
 
           <Route element={<ProtectedRoute user={user} />}>
             <Route path="/dashboard" element={user?.role === 'Patient' ? <PatientDashboardPage user={user} /> : user?.role === 'Therapist' ? <TherapistDashboardPage user={user} /> : user?.role === 'Admin' ? <AdminDashboardPage user={user} /> : <DashboardPage user={user} />} />
