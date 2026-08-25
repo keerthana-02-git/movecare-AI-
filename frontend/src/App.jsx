@@ -11,6 +11,21 @@ import {
   useNavigate,
 } from 'react-router-dom'
 import './App.css'
+import ProfileSummary from './components/dashboard/ProfileSummary'
+import RecoveryOverview from './components/dashboard/RecoveryOverview'
+import RecoveryGoal from './components/dashboard/RecoveryGoal'
+import TodaysExercises from './components/dashboard/TodaysExercises'
+import NextAppointment from './components/dashboard/NextAppointment'
+import ProgressSummary from './components/dashboard/ProgressSummary'
+import ExerciseCard from './components/exercises/ExerciseCard'
+import ExerciseDetailModal from './components/exercises/ExerciseDetailModal'
+import ExerciseFilters from './components/exercises/ExerciseFilters'
+import ProgressOverviewCard from './components/progress/ProgressOverviewCard'
+import WeeklyProgressChart from './components/progress/WeeklyProgressChart'
+import MonthlySummaryCard from './components/progress/MonthlySummaryCard'
+import CompletionTrendChart from './components/progress/CompletionTrendChart'
+import PainTrendCard from './components/progress/PainTrendCard'
+import MobilityTrendCard from './components/progress/MobilityTrendCard'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 
@@ -1087,19 +1102,7 @@ function TherapistDashboardPage({ user }) {
   </div></main>
 }
 
-function DashboardCard({ title, eyebrow, children, className = '' }) {
-  return (
-    <section className={`dashboard-card ${className}`}>
-      <div className="dashboard-card-heading">
-        <div>
-          {eyebrow && <span className="card-eyebrow">{eyebrow}</span>}
-          <h3>{title}</h3>
-        </div>
-      </div>
-      {children}
-    </section>
-  )
-}
+
 
 function LoadingDashboard() {
   return (
@@ -1124,125 +1127,241 @@ function formatDate(value) {
 
 function PatientDashboardPage({ user }) {
   const [dashboard, setDashboard] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  useEffect(() => {
+  const loadDashboard = async () => {
     const token = localStorage.getItem('movecare-token')
-    const loadDashboard = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/patients/me/dashboard`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        const data = await response.json()
-        if (!response.ok) throw new Error(data.message || 'Unable to load your dashboard')
-        setDashboard(data)
-      } catch (loadError) {
-        setError(loadError.message)
-      }
+    try {
+      setLoading(true)
+      setError('')
+      const response = await fetch(`${API_BASE_URL}/patients/me/dashboard`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message || 'Unable to load your dashboard')
+      setDashboard(data)
+    } catch (loadError) {
+      setError(loadError.message || 'Failed to connect to care services. Please try again.')
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     loadDashboard()
   }, [])
 
-  if (error) {
+  if (error && !dashboard) {
     return (
-      <main className="page-shell">
+      <main className="page-shell dashboard-page">
         <div className="container dashboard-wrap">
-          <div className="dashboard-error" role="alert">
-            <strong>We could not load your dashboard.</strong>
-            <p>{error}. Please try again shortly.</p>
+          <div className="dashboard-error-card" role="alert">
+            <span className="error-icon" aria-hidden="true">⚠️</span>
+            <h3>We could not load your recovery dashboard</h3>
+            <p>{error}</p>
+            <button type="button" className="primary-btn small" onClick={loadDashboard}>
+              🔄 Try Again
+            </button>
           </div>
         </div>
       </main>
     )
   }
 
-  if (!dashboard) return <LoadingDashboard />
+  if (loading && !dashboard) {
+    return <LoadingDashboard />
+  }
 
-  const { patient, plans, upcomingAppointment, progress, notifications, stats } = dashboard
-  const therapistName = patient.assignedTherapist?.user?.name || 'Care team pending'
-  const exerciseItems = plans.flatMap((plan) => plan.exercises.map((item) => ({ ...item, planName: plan.name })))
-  const completedExerciseIds = new Set(progress.filter((item) => item.completionStatus === 'Completed').map((item) => String(item.exercise?._id)))
+  // Safe data extraction with fallbacks to avoid any undefined access crashes
+  const profile = dashboard?.profile || {
+    name: user?.name,
+    email: user?.email,
+    medicalCondition: dashboard?.patient?.medicalCondition,
+    injuryDescription: dashboard?.patient?.injuryDescription,
+    dateOfBirth: dashboard?.patient?.dateOfBirth,
+    gender: dashboard?.patient?.gender,
+    phoneNumber: dashboard?.patient?.phoneNumber,
+    address: dashboard?.patient?.address,
+    status: dashboard?.patient?.status || 'Active',
+    assignedTherapist: dashboard?.patient?.assignedTherapist?.user ? {
+      name: dashboard.patient.assignedTherapist.user.name,
+      specialization: dashboard.patient.assignedTherapist.specialization,
+    } : null,
+    profileCompleted: Boolean(dashboard?.patient?.medicalCondition && dashboard.patient.medicalCondition !== 'Profile setup required'),
+  }
+
+  const recovery = dashboard?.recovery || {
+    completionPercentage: dashboard?.stats?.completionRate ?? 0,
+    completionRate: dashboard?.stats?.completionRate ?? 0,
+    totalAssignedExercises: dashboard?.stats?.totalAssignedExercises ?? 0,
+    completedExercises: dashboard?.stats?.completedExercises ?? 0,
+    remainingExercises: dashboard?.stats?.remainingExercises ?? 0,
+    currentStreak: dashboard?.stats?.currentStreak ?? 0,
+    activePlansCount: Array.isArray(dashboard?.plans) ? dashboard.plans.length : 0,
+  }
+
+  const recoveryGoal = dashboard?.recoveryGoal || (dashboard?.plans?.[0]?.goals || dashboard?.patient?.medicalCondition ? {
+    goal: dashboard.plans?.[0]?.goals || `Recovery for ${dashboard.patient?.medicalCondition}`,
+    condition: dashboard?.patient?.medicalCondition !== 'Profile setup required' ? dashboard.patient.medicalCondition : null,
+    planName: dashboard?.plans?.[0]?.name,
+    planStartDate: dashboard?.plans?.[0]?.startDate,
+    planEndDate: dashboard?.plans?.[0]?.endDate,
+    notes: dashboard?.plans?.[0]?.notes,
+  } : null)
+
+  const exercises = dashboard?.exercises || {
+    today: [],
+    todayTotal: 0,
+    todayCompleted: 0,
+    todayRemaining: 0,
+    allAssigned: dashboard?.plans?.flatMap((p) => p.exercises || []) || [],
+    totalAssigned: dashboard?.stats?.totalAssignedExercises ?? 0,
+  }
+
+  const appointment = dashboard?.appointment || dashboard?.upcomingAppointment || null
+
+  const progressSummary = dashboard?.progressSummary || {
+    overallProgressPercentage: dashboard?.stats?.completionRate ?? 0,
+    completionRate: dashboard?.stats?.completionRate ?? 0,
+    completedSessions: dashboard?.stats?.completedSessions ?? 0,
+    totalSessions: dashboard?.stats?.totalSessions ?? (dashboard?.progress?.length ?? 0),
+    averagePain: dashboard?.stats?.averagePain,
+    averageMobility: dashboard?.stats?.averageMobility,
+    mobilityStatus: dashboard?.stats?.mobilityStatus || 'Awaiting check-in',
+    recentEntries: Array.isArray(dashboard?.progress) ? dashboard.progress.slice(0, 5) : [],
+  }
+
+  const notifications = Array.isArray(dashboard?.notifications) ? dashboard.notifications : []
+  const patientFirstName = (profile?.name || user?.name || 'Patient').split(' ')[0]
 
   return (
-    <main className="page-shell dashboard-page">
-      <div className="container dashboard-wrap">
-        <div className="dashboard-hero">
-          <div>
-            <span className="eyebrow accent">Patient dashboard</span>
-            <h2>Good to see you, {user.name.split(' ')[0]}.</h2>
-            <p>Here is your latest recovery snapshot and today&apos;s care plan.</p>
+    <main className="page-shell dashboard-page patient-dashboard-page">
+      <div className="container dashboard-wrap patient-dashboard-wrap">
+        {/* Patient Dashboard Hero */}
+        <div className="dashboard-hero patient-hero">
+          <div className="hero-text-content">
+            <span className="eyebrow accent">Patient Recovery Workspace</span>
+            <h2>Good to see you, {patientFirstName}.</h2>
+            <p>Here is your dynamic rehabilitation snapshot, today&apos;s routine, and progress signals.</p>
           </div>
-          <div className="dashboard-avatar" aria-hidden="true">{user.name.charAt(0)}</div>
+          <div className="hero-action-group">
+            <button
+              type="button"
+              className="refresh-dashboard-btn"
+              onClick={loadDashboard}
+              disabled={loading}
+              title="Refresh dashboard data"
+            >
+              {loading ? 'Refreshing...' : '🔄 Refresh Data'}
+            </button>
+            <div className="dashboard-avatar patient-avatar" aria-hidden="true">
+              {(profile?.name || user?.name || 'P').charAt(0).toUpperCase()}
+            </div>
+          </div>
         </div>
 
-        <div className="dashboard-grid">
-          <DashboardCard title="Recovery progress" eyebrow="This cycle" className="progress-card">
-            <div className="progress-summary">
-              <strong>{stats.completionRate}%</strong>
-              <span>exercise completion</span>
+        {/* Quick Actions Bar */}
+        <nav className="patient-quick-actions" aria-label="Dashboard quick navigation">
+          <NavLink to="/my-exercises" className="quick-action-item">
+            <span className="action-icon" aria-hidden="true">🏋️</span>
+            <div>
+              <strong>Daily Exercises</strong>
+              <small>{exercises.todayRemaining > 0 ? `${exercises.todayRemaining} pending today` : 'View routine'}</small>
             </div>
-            <div className="progress-track" aria-label={`${stats.completionRate}% exercise completion`}>
-              <span style={{ width: `${stats.completionRate}%` }} />
+          </NavLink>
+          <NavLink to="/appointments" className="quick-action-item">
+            <span className="action-icon" aria-hidden="true">📅</span>
+            <div>
+              <strong>Consultations</strong>
+              <small>{appointment ? '1 scheduled' : 'Book visit'}</small>
             </div>
-            <div className="stat-row">
-              <span><strong>{stats.completedSessions}</strong> completed sessions</span>
-              <span><strong>{plans.length}</strong> active plans</span>
+          </NavLink>
+          <NavLink to="/progress" className="quick-action-item">
+            <span className="action-icon" aria-hidden="true">📊</span>
+            <div>
+              <strong>Recovery Progress</strong>
+              <small>{recovery.completionPercentage}% adherence</small>
             </div>
-          </DashboardCard>
+          </NavLink>
+          <NavLink to="/ai-assistant" className="quick-action-item">
+            <span className="action-icon" aria-hidden="true">🤖</span>
+            <div>
+              <strong>AI Recovery Guide</strong>
+              <small>Ask questions</small>
+            </div>
+          </NavLink>
+        </nav>
 
-          <DashboardCard title="Pain & mobility" eyebrow="Latest signal">
-            <div className="signal-value">{stats.averagePain === null ? '--' : `${stats.averagePain}/10`}</div>
-            <div className="signal-label">Average reported pain</div>
-            <span className={`status-pill ${stats.mobilityStatus === 'Needs attention' ? 'warning' : ''}`}>{stats.mobilityStatus}</span>
-          </DashboardCard>
+        {/* Dynamic 6-Component Dashboard Grid */}
+        <div className="patient-dashboard-grid">
+          {/* 1. Recovery Overview */}
+          <RecoveryOverview recovery={recovery} />
 
-          <DashboardCard title="Next appointment" eyebrow="Coming up">
-            {upcomingAppointment ? (
-              <div className="appointment-detail">
-                <strong>{formatDate(upcomingAppointment.appointmentDate)}</strong>
-                <span>{upcomingAppointment.startTime} - {upcomingAppointment.endTime} · {upcomingAppointment.type}</span>
-                <span>with {upcomingAppointment.therapist?.user?.name || therapistName}</span>
-                {upcomingAppointment.location && <small>{upcomingAppointment.location}</small>}
-              </div>
-            ) : <p className="empty-state">No upcoming appointments scheduled.</p>}
-          </DashboardCard>
+          {/* 2. Recovery Goal */}
+          <RecoveryGoal recoveryGoal={recoveryGoal} />
 
-          <DashboardCard title="My profile" eyebrow="Care details">
-            <dl className="profile-list">
-              <div><dt>Condition</dt><dd>{patient.medicalCondition}</dd></div>
-              <div><dt>Therapist</dt><dd>{therapistName}</dd></div>
-              <div><dt>Status</dt><dd>{patient.status}</dd></div>
-            </dl>
-          </DashboardCard>
+          {/* 3. Today's Recovery */}
+          <TodaysExercises
+            exercises={exercises}
+            onCompleteExercise={async (exerciseId, planId, completionData) => {
+              await apiRequest(`/exercises/patient/${exerciseId}/complete`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  planId,
+                  painLevel: completionData.painLevel,
+                  mobilityScore: completionData.mobilityScore,
+                  notes: completionData.notes,
+                }),
+              })
+              await loadDashboard()
+            }}
+          />
 
-          <DashboardCard title="Assigned exercises" eyebrow="Your plan" className="exercise-card">
-            {exerciseItems.length ? (
-              <div className="exercise-list">
-                {exerciseItems.map((item) => (
-                  <div className="exercise-row" key={`${item.planName}-${item.exercise?._id}`}>
-                    <span className={`exercise-check ${completedExerciseIds.has(String(item.exercise?._id)) ? 'complete' : ''}`} aria-hidden="true">{completedExerciseIds.has(String(item.exercise?._id)) ? '✓' : ''}</span>
-                    <div><strong>{item.exercise?.name || 'Exercise'}</strong><span>{item.exercise?.duration} min · {item.frequency}</span></div>
-                    <small>{item.exercise?.difficulty}</small>
-                  </div>
-                ))}
-              </div>
-            ) : <p className="empty-state">Your care team has not assigned exercises yet.</p>}
-          </DashboardCard>
+          {/* 4. Next Appointment */}
+          <NextAppointment appointment={appointment} />
 
-          <DashboardCard title="Notifications" eyebrow="Stay informed">
-            {notifications.length ? (
-              <div className="notification-list">
-                {notifications.map((notification) => (
-                  <div className={`notification-row ${notification.isRead ? '' : 'unread'}`} key={notification._id}>
-                    <span className="notification-dot" aria-hidden="true" />
-                    <div><strong>{notification.title}</strong><p>{notification.message}</p></div>
-                  </div>
-                ))}
-              </div>
-            ) : <p className="empty-state">You are all caught up.</p>}
-          </DashboardCard>
+          {/* 5. Patient Profile Summary */}
+          <ProfileSummary profile={profile} user={user} />
+
+          {/* 6. Progress Summary */}
+          <ProgressSummary progressSummary={progressSummary} />
         </div>
+
+        {/* Notifications preview if present */}
+        {notifications.length > 0 && (
+          <section className="dashboard-card notifications-dashboard-card" aria-labelledby="notifications-title">
+            <div className="dashboard-card-heading">
+              <span className="card-eyebrow">Stay Informed</span>
+              <div className="notifications-heading-row">
+                <h3 id="notifications-title">Care Notifications</h3>
+                <NavLink to="/notifications" className="view-all-link">
+                  Open Inbox ({notifications.length}) →
+                </NavLink>
+              </div>
+            </div>
+            <div className="notification-list">
+              {notifications.slice(0, 3).map((notification) => (
+                <div
+                  className={`notification-row ${notification.isRead ? '' : 'unread'}`}
+                  key={notification._id || notification.id}
+                >
+                  <span className="notification-dot" aria-hidden="true" />
+                  <div className="notification-row-main">
+                    <strong>{notification.title}</strong>
+                    <p>{notification.message}</p>
+                    <small>{formatDate(notification.createdAt)}</small>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Live Monitoring preview */}
         <LiveMonitoringCard role="Patient" />
+
+        {/* AI Recommendations panel */}
         <RecommendationPanel />
       </div>
     </main>
@@ -1347,27 +1466,294 @@ function ExerciseManagementPage() {
 
 function PatientExercisesPage() {
   const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [completing, setCompleting] = useState('')
-  const [pain, setPain] = useState('')
-  const [mobilityScore, setMobilityScore] = useState('')
-  const [notes, setNotes] = useState('')
+  const [search, setSearch] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('all')
+  const [selectedStatus, setSelectedStatus] = useState('today')
+  const [activeModalItem, setActiveModalItem] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [modalError, setModalError] = useState('')
+  const [toastNotice, setToastNotice] = useState('')
 
   const loadExercises = async () => {
-    try { setData(await apiRequest('/exercises/patient/assigned')); setError('') } catch (loadError) { setError(loadError.message) }
+    try {
+      setLoading(true)
+      const res = await apiRequest('/exercises/patient/assigned')
+      setData(res)
+      setError('')
+    } catch (loadError) {
+      setError(loadError.message || 'Failed to load assigned exercises.')
+    } finally {
+      setLoading(false)
+    }
   }
-  useEffect(() => { loadExercises() }, [])
 
-  const completeExercise = async (exerciseId, planId) => {
-    try { await apiRequest(`/exercises/patient/${exerciseId}/complete`, { method: 'POST', body: JSON.stringify({ planId, painLevel: pain, mobilityScore, notes }) }); setCompleting(''); setPain(''); setMobilityScore(''); setNotes(''); await loadExercises() } catch (completeError) { setError(completeError.message) }
+  useEffect(() => {
+    loadExercises()
+  }, [])
+
+  const handleComplete = async (exerciseId, planId, completionData) => {
+    try {
+      setSubmitting(true)
+      setModalError('')
+      await apiRequest(`/exercises/patient/${exerciseId}/complete`, {
+        method: 'POST',
+        body: JSON.stringify({
+          planId,
+          painLevel: completionData.painLevel,
+          mobilityScore: completionData.mobilityScore,
+          notes: completionData.notes,
+        }),
+      })
+      setActiveModalItem(null)
+      setToastNotice('🎉 Exercise completed and progress saved to your care team!')
+      setTimeout(() => setToastNotice(''), 5000)
+      await loadExercises()
+    } catch (err) {
+      setModalError(err.message || 'Unable to record exercise completion. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  if (error && !data) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
-  if (!data) return <LoadingDashboard />
+  if (loading && !data) {
+    return <LoadingDashboard />
+  }
 
-  const completed = new Set(data.progress.filter((item) => item.completionStatus === 'Completed').map((item) => `${item.exercise}-${item.exercisePlan}`))
-  const exercises = data.plans.flatMap((plan) => plan.exercises.map((item) => ({ ...item, planId: plan._id, planName: plan.name })))
-  return <main className="page-shell"><div className="container management-wrap"><div className="management-heading"><div><span className="eyebrow accent">Your movement plan</span><h2>Assigned exercises</h2><p>Follow each instruction at your own pace and record the session when you finish.</p></div></div>{error && <div className="form-error" role="alert">{error}</div>}{exercises.length ? <div className="patient-exercise-grid">{exercises.map((item) => { const exercise = item.exercise; const key = `${exercise?._id}-${item.planId}`; const isComplete = completed.has(key); return <article className="patient-exercise-card" key={key}><div className="library-item-top"><span className="exercise-category">{item.planName}</span><span className={`completion-tag ${isComplete ? 'complete' : ''}`}>{isComplete ? 'Completed' : item.frequency}</span></div><h3>{exercise?.name || 'Exercise'}</h3><p>{exercise?.description}</p><div className="exercise-meta"><span>{exercise?.targetBodyPart}</span><span>{exercise?.duration} min</span><span>{exercise?.sets} × {exercise?.reps}</span></div><div className="instruction-box"><strong>Instructions</strong><p>{exercise?.instructions}</p>{exercise?.precautions && <small>Safety: {exercise.precautions}</small>}</div>{exercise?.videoUrl && <a className="resource-link" href={exercise.videoUrl} target="_blank" rel="noreferrer">Watch exercise video</a>}{!isComplete && (completing === key ? <div className="completion-form"><label>Pain level (0-10)<input type="number" min="0" max="10" value={pain} onChange={(event) => setPain(event.target.value)} /></label><label>Mobility score (0-100)<input type="number" min="0" max="100" value={mobilityScore} onChange={(event) => setMobilityScore(event.target.value)} /></label><label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="How did it feel?" /></label><div className="form-actions"><button type="button" className="primary-btn" onClick={() => completeExercise(exercise._id, item.planId)}>Mark completed</button><button type="button" className="secondary-btn" onClick={() => setCompleting('')}>Cancel</button></div></div> : <button type="button" className="primary-btn completion-button" onClick={() => setCompleting(key)}>Mark as completed</button>)}</article> })}</div> : <div className="dashboard-panel"><p className="empty-state">Your therapist has not assigned any exercises yet.</p></div>}</div></main>
+  if (error && !data) {
+    return (
+      <main className="page-shell">
+        <div className="container dashboard-wrap">
+          <div className="dashboard-error-card" role="alert">
+            <span className="error-icon" aria-hidden="true">⚠️</span>
+            <h3>Unable to Load Exercises</h3>
+            <p>{error}</p>
+            <button type="button" className="primary-btn" onClick={loadExercises}>
+              Try Again
+            </button>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  // Today boundaries
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const todayEnd = todayStart + 86400000
+
+  // Build progress lookup map
+  const progressList = Array.isArray(data?.progress) ? data.progress : []
+  const todayCompletedSet = new Set()
+  const latestProgressMap = new Map()
+
+  progressList.forEach((p) => {
+    const exId = String(p.exercise?._id || p.exercise || '')
+    const planId = String(p.exercisePlan?._id || p.exercisePlan || '')
+    const key = `${exId}-${planId}`
+
+    if (!latestProgressMap.has(key)) {
+      latestProgressMap.set(key, p)
+    }
+
+    if (p.completionStatus === 'Completed' && p.datePerformed) {
+      const pTime = new Date(p.datePerformed).getTime()
+      if (pTime >= todayStart && pTime < todayEnd) {
+        todayCompletedSet.add(key)
+        todayCompletedSet.add(exId) // also match by exercise id
+      }
+    }
+  })
+
+  // Flatten plans into exercise items
+  const plans = Array.isArray(data?.plans) ? data.plans : []
+  const allItems = plans.flatMap((plan) => {
+    const planExercises = Array.isArray(plan.exercises) ? plan.exercises : []
+    return planExercises.map((item, index) => {
+      const ex = item.exercise || {}
+      const exId = String(ex._id || `ex-${index}`)
+      const planId = String(plan._id || '')
+      const key = `${exId}-${planId}`
+      const isCompletedToday = todayCompletedSet.has(key) || todayCompletedSet.has(exId)
+      const latestProg = latestProgressMap.get(key) || latestProgressMap.get(exId)
+
+      // Frequency matching
+      const freq = item.frequency || 'Daily'
+      let isScheduledToday = true
+      const dayOfWeek = now.getDay()
+      if (freq === 'Every2Days' && plan.startDate) {
+        const diffDays = Math.floor((now.getTime() - new Date(plan.startDate).getTime()) / 86400000)
+        isScheduledToday = diffDays % 2 === 0
+      } else if (freq === 'Weekly') {
+        isScheduledToday = dayOfWeek === 1 // Monday
+      } else if (freq === 'Twice') {
+        isScheduledToday = dayOfWeek === 1 || dayOfWeek === 4 // Mon & Thu
+      }
+
+      return {
+        ...item,
+        exercise: ex,
+        planId: plan._id,
+        planName: plan.name || 'Rehabilitation Plan',
+        isCompletedToday,
+        isScheduledToday,
+        painLevel: isCompletedToday ? latestProg?.painLevel : undefined,
+        completedAt: isCompletedToday ? latestProg?.datePerformed : undefined,
+        notes: isCompletedToday ? latestProg?.notes : undefined,
+      }
+    })
+  })
+
+  // Extract distinct categories
+  const categories = Array.from(
+    new Set(
+      allItems
+        .map((item) => item.exercise?.category)
+        .filter(Boolean)
+    )
+  )
+
+  // Counts
+  const counts = {
+    all: allItems.length,
+    today: allItems.filter((i) => i.isScheduledToday).length,
+    completed: allItems.filter((i) => i.isCompletedToday).length,
+    pending: allItems.filter((i) => i.isScheduledToday && !i.isCompletedToday).length,
+  }
+
+  // Filter items
+  const filteredItems = allItems.filter((item) => {
+    const ex = item.exercise || {}
+    // Status filter
+    if (selectedStatus === 'today' && !item.isScheduledToday) return false
+    if (selectedStatus === 'completed' && !item.isCompletedToday) return false
+    if (selectedStatus === 'pending' && (!item.isScheduledToday || item.isCompletedToday)) return false
+
+    // Category filter
+    if (selectedCategory !== 'all' && ex.category !== selectedCategory) return false
+
+    // Search filter
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      const matchName = (ex.name || '').toLowerCase().includes(q)
+      const matchPart = (ex.targetBodyPart || '').toLowerCase().includes(q)
+      const matchDesc = (ex.description || '').toLowerCase().includes(q)
+      const matchPlan = (item.planName || '').toLowerCase().includes(q)
+      if (!matchName && !matchPart && !matchDesc && !matchPlan) return false
+    }
+
+    return true
+  })
+
+  return (
+    <main className="page-shell patient-exercises-shell">
+      <div className="container management-wrap patient-exercises-wrap">
+        {/* Toast Notification */}
+        {toastNotice && (
+          <div className="toast-success-banner" role="status">
+            {toastNotice}
+          </div>
+        )}
+
+        {/* Page Header */}
+        <div className="management-heading exercises-page-header">
+          <div>
+            <span className="eyebrow accent">Personalized Exercise Center</span>
+            <h2>Your Movement Routine</h2>
+            <p>
+              Perform each prescribed exercise with proper form, monitor your joint comfort, and log your session.
+            </p>
+          </div>
+          <div className="header-stats-pill">
+            <span>Today&apos;s Progress:</span>
+            <strong>{counts.completed} / {counts.today} completed</strong>
+          </div>
+        </div>
+
+        {/* Filters and Search Bar */}
+        {allItems.length > 0 && (
+          <ExerciseFilters
+            search={search}
+            onSearchChange={setSearch}
+            selectedCategory={selectedCategory}
+            onCategoryChange={setSelectedCategory}
+            selectedStatus={selectedStatus}
+            onStatusChange={setSelectedStatus}
+            categories={categories}
+            counts={counts}
+          />
+        )}
+
+        {/* Exercise Grid or Empty States */}
+        {filteredItems.length > 0 ? (
+          <div className="patient-exercise-cards-grid">
+            {filteredItems.map((item, index) => {
+              const exId = item.exercise?._id || `item-${index}`
+              return (
+                <ExerciseCard
+                  key={`${item.planId || 'plan'}-${exId}`}
+                  item={item}
+                  onOpenDetail={(target) => {
+                    setModalError('')
+                    setActiveModalItem(target)
+                  }}
+                  onQuickComplete={(target) => {
+                    setModalError('')
+                    setActiveModalItem(target)
+                  }}
+                />
+              )
+            })}
+          </div>
+        ) : allItems.length > 0 ? (
+          <div className="dashboard-panel filter-empty-panel">
+            <span className="empty-icon" aria-hidden="true">🔍</span>
+            <h3>No exercises match your filter</h3>
+            <p>Try clearing your search query or selecting &quot;All Assigned&quot; tab.</p>
+            <button
+              type="button"
+              className="secondary-btn small"
+              onClick={() => {
+                setSearch('')
+                setSelectedCategory('all')
+                setSelectedStatus('all')
+              }}
+            >
+              Reset Filters
+            </button>
+          </div>
+        ) : (
+          <div className="dashboard-panel empty-assigned-panel">
+            <span className="empty-icon" aria-hidden="true">📋</span>
+            <h3>No Assigned Exercises Yet</h3>
+            <p>
+              Your physical therapy clinician has not assigned any active rehabilitation plans to your account yet. When a plan is created, your tailored routine will appear here.
+            </p>
+            <NavLink to="/dashboard" className="primary-btn small">
+              Return to Dashboard
+            </NavLink>
+          </div>
+        )}
+
+        {/* Detail Modal */}
+        {activeModalItem && (
+          <ExerciseDetailModal
+            item={activeModalItem}
+            onClose={() => {
+              if (!submitting) {
+                setActiveModalItem(null)
+                setModalError('')
+              }
+            }}
+            onComplete={handleComplete}
+            submitting={submitting}
+            submitError={modalError}
+          />
+        )}
+      </div>
+    </main>
+  )
 }
 
 function ProgressChart({ data, dataKey, color, max = 100, emptyLabel }) {
@@ -1389,12 +1775,152 @@ function ProgressMetric({ label, value, suffix = '' }) {
 
 function PatientProgressPage() {
   const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  useEffect(() => { apiRequest('/progress/me').then(setData).catch((loadError) => setError(loadError.message)) }, [])
-  if (error) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
-  if (!data) return <LoadingDashboard />
-  const { summary, timeline, entries } = data
-  return <main className="page-shell progress-page"><div className="container management-wrap"><div className="management-heading"><span className="eyebrow accent">Your recovery data</span><h2>Progress tracking</h2><p>See how your exercise routine, pain, mobility, and attendance are changing over time.</p></div><div className="progress-metrics"><ProgressMetric label="Exercise adherence" value={summary.exerciseAdherence} suffix="%" /><ProgressMetric label="Completed sessions" value={summary.completedSessions} /><ProgressMetric label="Mobility score" value={summary.mobilityScore} suffix="/100" /><ProgressMetric label="Appointment attendance" value={summary.appointmentAttendance} suffix="%" /><ProgressMetric label="Average pain" value={summary.averagePain} suffix="/10" /></div><div className="progress-chart-grid"><section className="management-panel chart-panel"><div className="panel-heading"><div><span className="card-eyebrow">Consistency</span><h3>Exercise completion</h3></div></div><ProgressChart data={timeline} dataKey="completionRate" color="#0d8b85" emptyLabel="Complete an exercise to begin your timeline." /></section><section className="management-panel chart-panel"><div className="panel-heading"><div><span className="card-eyebrow">Movement signal</span><h3>Mobility score</h3></div></div><ProgressChart data={timeline.filter((item) => item.mobilityScore !== null)} dataKey="mobilityScore" color="#2b77d1" emptyLabel="Add a mobility score when completing an exercise." /></section><section className="management-panel chart-panel"><div className="panel-heading"><div><span className="card-eyebrow">Comfort signal</span><h3>Pain level</h3></div></div><ProgressChart data={timeline.filter((item) => item.pain !== null)} dataKey="pain" color="#e28a3d" max={10} emptyLabel="Add a pain level when completing an exercise." /></section></div><section className="management-panel"><div className="panel-heading"><div><span className="card-eyebrow">Session history</span><h3>Recent sessions</h3></div></div>{entries.length ? <div className="progress-table">{entries.slice().reverse().slice(0, 12).map((entry) => <div className="progress-table-row" key={entry._id}><span>{formatDate(entry.datePerformed)}</span><strong>{entry.exercise?.name || 'Exercise'}</strong><span className="completion-tag complete">{entry.completionStatus}</span><span>{entry.mobilityScore === undefined ? '--' : `${entry.mobilityScore}/100`} mobility</span><span>{entry.painLevel === undefined ? '--' : `${entry.painLevel}/10`} pain</span></div>)}</div> : <p className="empty-state">No progress sessions recorded yet.</p>}</section></div></main>
+
+  const loadProgress = async () => {
+    try {
+      setLoading(true)
+      const res = await apiRequest('/progress/me')
+      setData(res)
+      setError('')
+    } catch (loadError) {
+      setError(loadError.message || 'Unable to load recovery progress.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadProgress()
+  }, [])
+
+  if (loading && !data) {
+    return <LoadingDashboard />
+  }
+
+  if (error && !data) {
+    return (
+      <main className="page-shell">
+        <div className="container dashboard-wrap">
+          <div className="dashboard-error-card" role="alert">
+            <span className="error-icon" aria-hidden="true">⚠️</span>
+            <h3>Unable to Load Progress</h3>
+            <p>{error}</p>
+            <button type="button" className="primary-btn" onClick={loadProgress}>
+              Try Again
+            </button>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  const entries = Array.isArray(data?.entries) ? data.entries : []
+
+  return (
+    <main className="page-shell progress-page patient-progress-page">
+      <div className="container management-wrap patient-progress-wrap">
+        {/* Progress Tracker Hero */}
+        <div className="management-heading progress-page-hero">
+          <div>
+            <span className="eyebrow accent">Recovery Progress Tracker</span>
+            <h2>Your Rehabilitation Analytics</h2>
+            <p>
+              Review your exercise adherence, workout consistency streaks, weekly matrix, monthly milestones, and clinical comfort curves.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="refresh-dashboard-btn"
+            onClick={loadProgress}
+            disabled={loading}
+            title="Refresh progress data"
+          >
+            {loading ? 'Updating...' : '🔄 Refresh Analytics'}
+          </button>
+        </div>
+
+        {/* Top Tier: Overview & Weekly 7-Day Matrix */}
+        <div className="progress-dual-grid">
+          <ProgressOverviewCard overview={data?.overview} />
+          <WeeklyProgressChart weekly={data?.weekly} />
+        </div>
+
+        {/* Middle Tier: Monthly Summary & Completion Trend */}
+        <div className="progress-dual-grid">
+          <MonthlySummaryCard monthly={data?.monthly} />
+          <CompletionTrendChart completionTrend={data?.completionTrend} />
+        </div>
+
+        {/* Bottom Tier: Pain & Mobility Trends */}
+        <div className="progress-dual-grid">
+          <PainTrendCard painTrend={data?.painTrend} />
+          <MobilityTrendCard mobilityTrend={data?.mobilityTrend} />
+        </div>
+
+        {/* Full Session History Table */}
+        <section className="dashboard-card progress-history-panel" aria-labelledby="session-history-title">
+          <div className="dashboard-card-heading">
+            <span className="card-eyebrow">Audit Trail</span>
+            <div className="history-heading-row">
+              <h3 id="session-history-title">Complete Exercise Log History</h3>
+              <span className="history-count-badge">
+                <strong>{entries.length}</strong> {entries.length === 1 ? 'record' : 'records'} logged
+              </span>
+            </div>
+          </div>
+
+          {entries.length > 0 ? (
+            <div className="progress-table-wrap">
+              <div className="progress-table">
+                <div className="progress-table-header">
+                  <span>Date</span>
+                  <span>Exercise</span>
+                  <span>Status</span>
+                  <span>Pain Level</span>
+                  <span>Mobility</span>
+                  <span>Notes</span>
+                </div>
+                {entries
+                  .slice()
+                  .reverse()
+                  .map((entry) => (
+                    <div className="progress-table-row" key={entry._id}>
+                      <span className="table-date">{formatDate(entry.datePerformed)}</span>
+                      <strong className="table-ex-name">{entry.exercise?.name || 'Assigned Exercise'}</strong>
+                      <span>
+                        <span className={`completion-tag ${entry.completionStatus === 'Completed' ? 'complete' : ''}`}>
+                          {entry.completionStatus}
+                        </span>
+                      </span>
+                      <span className="table-pain">
+                        {entry.painLevel !== undefined && entry.painLevel !== null ? `${entry.painLevel}/10` : '--'}
+                      </span>
+                      <span className="table-mobility">
+                        {entry.mobilityScore !== undefined && entry.mobilityScore !== null ? `${entry.mobilityScore}/100` : '--'}
+                      </span>
+                      <span className="table-notes" title={entry.notes || ''}>
+                        {entry.notes ? `"${entry.notes}"` : <span className="empty-dash">--</span>}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ) : (
+            <div className="history-empty-state">
+              <span className="empty-icon" aria-hidden="true">📋</span>
+              <h4>No exercise progress available yet.</h4>
+              <p>When you perform and log prescribed exercises, every session will appear in this clinical log.</p>
+              <NavLink to="/my-exercises" className="primary-btn small">
+                Start an Exercise
+              </NavLink>
+            </div>
+          )}
+        </section>
+      </div>
+    </main>
+  )
 }
 
 function AssistantPage() {

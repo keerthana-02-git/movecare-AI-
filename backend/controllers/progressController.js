@@ -2,13 +2,7 @@ import { Appointment, ExercisePlan, Patient, Progress, Therapist } from '../mode
 import { ensureTherapistProfile } from './authController.js';
 import { ensurePatientProfile } from './patientController.js';
 
-const frequencyDays = {
-  Daily: 1,
-  Every2Days: 2,
-  EveryOtherDay: 2,
-  Twice: 3.5,
-  Weekly: 7,
-};
+const round = (value) => Math.round(value * 10) / 10;
 
 const getPatient = async (user) => {
   if (user?.role === 'Patient') return ensurePatientProfile(user);
@@ -20,19 +14,244 @@ const getTherapist = async (user) => {
   return Therapist.findOne({ user: user?._id || user });
 };
 
-const round = (value) => Math.round(value * 10) / 10;
+const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const shortDayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const monthNames = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 
-const expectedSessions = (plans) => {
-  const today = new Date();
-  return plans.reduce((total, plan) => {
-    const start = new Date(plan.startDate);
-    const end = new Date(Math.min(new Date(plan.endDate).getTime(), today.getTime()));
-    if (end < start) return total;
-    return total + plan.exercises.reduce((planTotal, item) => {
-      const days = Math.floor((end - start) / (24 * 60 * 60 * 1000)) + 1;
-      return planTotal + Math.max(1, Math.ceil(days / (frequencyDays[item.frequency] || 1)));
-    }, 0);
-  }, 0);
+const toISODate = (d) => {
+  const dateObj = new Date(d);
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const calculateStreaks = (completedProgress) => {
+  const dateSet = new Set();
+  completedProgress.forEach((p) => {
+    if (p.datePerformed) {
+      dateSet.add(toISODate(p.datePerformed));
+    }
+  });
+
+  if (dateSet.size === 0) {
+    return { currentStreak: 0, bestStreak: 0 };
+  }
+
+  // Calculate Best Streak
+  const sortedDates = Array.from(dateSet).sort();
+  let bestStreak = 1;
+  let runningStreak = 1;
+
+  for (let i = 1; i < sortedDates.length; i++) {
+    const prev = new Date(sortedDates[i - 1]);
+    const curr = new Date(sortedDates[i]);
+    const diffDays = Math.round((curr.getTime() - prev.getTime()) / (24 * 60 * 60 * 1000));
+
+    if (diffDays === 1) {
+      runningStreak += 1;
+      if (runningStreak > bestStreak) bestStreak = runningStreak;
+    } else if (diffDays > 1) {
+      runningStreak = 1;
+    }
+  }
+
+  // Calculate Current Streak
+  const now = new Date();
+  const todayStr = toISODate(now);
+  const yesterday = new Date(now.getTime() - 86400000);
+  const yesterdayStr = toISODate(yesterday);
+
+  let currentStreak = 0;
+  let checkDate = null;
+
+  if (dateSet.has(todayStr)) {
+    checkDate = new Date(now);
+  } else if (dateSet.has(yesterdayStr)) {
+    checkDate = new Date(yesterday);
+  }
+
+  if (checkDate) {
+    while (dateSet.has(toISODate(checkDate))) {
+      currentStreak += 1;
+      checkDate = new Date(checkDate.getTime() - 86400000);
+    }
+  }
+
+  return { currentStreak, bestStreak: Math.max(bestStreak, currentStreak) };
+};
+
+const buildWeeklyMatrix = (completedProgress, plans) => {
+  const now = new Date();
+  const weekly = [];
+
+  // Count scheduled exercises per day from active plans
+  const totalAssignedDaily = plans.reduce((acc, plan) => {
+    return acc + (plan.exercises?.length || 0);
+  }, 0) || 1;
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const dateStr = toISODate(d);
+    const dayOfWeek = d.getDay();
+    const isToday = i === 0;
+
+    const completedOnDay = completedProgress.filter((p) => toISODate(p.datePerformed) === dateStr);
+
+    weekly.push({
+      day: dayNames[dayOfWeek],
+      dayShort: shortDayNames[dayOfWeek],
+      date: dateStr,
+      completed: completedOnDay.length,
+      target: totalAssignedDaily,
+      isToday,
+      completionRate: Math.min(100, Math.round((completedOnDay.length / Math.max(1, totalAssignedDaily)) * 100)),
+    });
+  }
+
+  return weekly;
+};
+
+const buildMonthlyStats = (completedProgress, currentStreak) => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const monthStart = new Date(currentYear, currentMonth, 1).getTime();
+  const monthEnd = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59).getTime();
+
+  const monthProgress = completedProgress.filter((p) => {
+    const time = new Date(p.datePerformed).getTime();
+    return time >= monthStart && time <= monthEnd;
+  });
+
+  const activeDates = new Set(monthProgress.map((p) => toISODate(p.datePerformed)));
+  const completedThisMonth = monthProgress.length;
+  const activeDays = activeDates.size;
+  const averagePerActiveDay = activeDays > 0 ? round(completedThisMonth / activeDays) : 0;
+  const daysInMonthSoFar = now.getDate();
+  const completionPercentage = daysInMonthSoFar > 0 ? Math.min(100, Math.round((activeDays / daysInMonthSoFar) * 100)) : 0;
+
+  return {
+    completedThisMonth,
+    completionPercentage,
+    activeDays,
+    currentStreak,
+    averagePerActiveDay,
+    monthName: monthNames[currentMonth],
+    year: currentYear,
+  };
+};
+
+const buildCompletionTrends = (completedProgress) => {
+  const now = new Date();
+
+  // Helper for N days
+  const buildDaysSeries = (numDays) => {
+    const series = [];
+    for (let i = numDays - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      const dateStr = toISODate(d);
+      const label = numDays === 7 ? shortDayNames[d.getDay()] : `${d.getMonth() + 1}/${d.getDate()}`;
+      const completedCount = completedProgress.filter((p) => toISODate(p.datePerformed) === dateStr).length;
+
+      series.push({
+        date: dateStr,
+        label,
+        completed: completedCount,
+        isToday: i === 0,
+      });
+    }
+    return series;
+  };
+
+  return {
+    last7Days: buildDaysSeries(7),
+    last30Days: buildDaysSeries(30),
+  };
+};
+
+const buildPainTrendAnalytics = (progress) => {
+  const trackedPain = progress
+    .filter((entry) => entry.painLevel !== undefined && entry.painLevel !== null)
+    .sort((a, b) => new Date(a.datePerformed) - new Date(b.datePerformed));
+
+  if (trackedPain.length === 0) {
+    return {
+      averagePain: null,
+      latestPain: null,
+      painSeverity: 'None',
+      history: [],
+      weeklyAverages: [],
+    };
+  }
+
+  const painSum = trackedPain.reduce((sum, p) => sum + Number(p.painLevel), 0);
+  const averagePain = round(painSum / trackedPain.length);
+  const latestEntry = trackedPain[trackedPain.length - 1];
+  const latestPain = Number(latestEntry.painLevel);
+
+  let painSeverity = 'Mild';
+  if (averagePain === 0) painSeverity = 'None';
+  else if (averagePain <= 3) painSeverity = 'Mild';
+  else if (averagePain <= 6) painSeverity = 'Moderate';
+  else painSeverity = 'Severe';
+
+  const history = trackedPain.map((entry) => ({
+    date: toISODate(entry.datePerformed),
+    painLevel: Number(entry.painLevel),
+    exerciseName: entry.exercise?.name || 'Assigned Exercise',
+    notes: entry.notes || '',
+  }));
+
+  return {
+    averagePain,
+    latestPain,
+    painSeverity,
+    history,
+    totalRecords: trackedPain.length,
+  };
+};
+
+const buildMobilityTrendAnalytics = (progress) => {
+  const trackedMobility = progress
+    .filter((entry) => entry.mobilityScore !== undefined && entry.mobilityScore !== null)
+    .sort((a, b) => new Date(a.datePerformed) - new Date(b.datePerformed));
+
+  if (trackedMobility.length === 0) {
+    return {
+      averageMobility: null,
+      latestMobility: null,
+      mobilityStatus: 'No records',
+      history: [],
+    };
+  }
+
+  const mobilitySum = trackedMobility.reduce((sum, p) => sum + Number(p.mobilityScore), 0);
+  const averageMobility = Math.round(mobilitySum / trackedMobility.length);
+  const latestEntry = trackedMobility[trackedMobility.length - 1];
+  const latestMobility = Number(latestEntry.mobilityScore);
+
+  let mobilityStatus = 'Stable';
+  if (averageMobility >= 80) mobilityStatus = 'Optimal';
+  else if (averageMobility >= 60) mobilityStatus = 'Stable';
+  else mobilityStatus = 'Needs attention';
+
+  const history = trackedMobility.map((entry) => ({
+    date: toISODate(entry.datePerformed),
+    mobilityScore: Number(entry.mobilityScore),
+    exerciseName: entry.exercise?.name || 'Assigned Exercise',
+  }));
+
+  return {
+    averageMobility,
+    latestMobility,
+    mobilityStatus,
+    history,
+    totalRecords: trackedMobility.length,
+  };
 };
 
 const buildSummary = (progress, appointments, plans) => {
@@ -41,14 +260,15 @@ const buildSummary = (progress, appointments, plans) => {
   const trackedMobility = progress.filter((entry) => entry.mobilityScore !== undefined && entry.mobilityScore !== null);
   const pastAppointments = appointments.filter((appointment) => new Date(appointment.appointmentDate) < new Date() && !['Cancelled', 'NoShow'].includes(appointment.status));
   const attendedAppointments = pastAppointments.filter((appointment) => appointment.status === 'Completed');
-  const expected = expectedSessions(plans);
-  const adherence = expected ? Math.min(100, Math.round((completed.length / expected) * 100)) : 0;
+
+  const totalAssigned = plans.reduce((acc, plan) => acc + (plan.exercises?.length || 0), 0);
+  const completionRate = totalAssigned > 0 ? Math.min(100, Math.round((completed.length / totalAssigned) * 100)) : progress.length ? Math.round((completed.length / progress.length) * 100) : 0;
 
   return {
     completedSessions: completed.length,
     totalSessions: progress.length,
-    exerciseAdherence: adherence,
-    completionRate: progress.length ? Math.round((completed.length / progress.length) * 100) : 0,
+    exerciseAdherence: completionRate,
+    completionRate,
     averagePain: trackedPain.length ? round(trackedPain.reduce((total, entry) => total + entry.painLevel, 0) / trackedPain.length) : null,
     mobilityScore: trackedMobility.length ? Math.round(trackedMobility.reduce((total, entry) => total + entry.mobilityScore, 0) / trackedMobility.length) : null,
     appointmentAttendance: pastAppointments.length ? Math.round((attendedAppointments.length / pastAppointments.length) * 100) : 0,
@@ -60,7 +280,7 @@ const buildSummary = (progress, appointments, plans) => {
 const buildTimeline = (progress) => {
   const grouped = new Map();
   progress.forEach((entry) => {
-    const date = new Date(entry.datePerformed).toISOString().slice(0, 10);
+    const date = toISODate(entry.datePerformed);
     const current = grouped.get(date) || { date, completed: 0, sessions: 0, painTotal: 0, painCount: 0, mobilityTotal: 0, mobilityCount: 0 };
     current.sessions += 1;
     if (entry.completionStatus === 'Completed') current.completed += 1;
@@ -77,21 +297,62 @@ const buildTimeline = (progress) => {
   }));
 };
 
-const getProgressPayload = async (patientId) => {
+export const getProgressPayload = async (patientId) => {
   const [patient, progress, appointments, plans] = await Promise.all([
     Patient.findById(patientId).populate('user', 'name email').lean(),
-    Progress.find({ patient: patientId }).sort({ datePerformed: 1 }).populate('exercise', 'name').lean(),
+    Progress.find({ patient: patientId }).sort({ datePerformed: 1 }).populate('exercise', 'name category targetBodyPart difficulty').lean(),
     Appointment.find({ patient: patientId }).sort({ appointmentDate: 1 }).lean(),
     ExercisePlan.find({ patient: patientId, status: { $in: ['Active', 'Paused', 'Completed'] } }).lean(),
   ]);
-  return { patient, entries: progress, timeline: buildTimeline(progress), summary: buildSummary(progress, appointments, plans) };
+
+  const completedProgress = progress.filter((p) => p.completionStatus === 'Completed');
+  const totalAssigned = plans.reduce((acc, plan) => acc + (plan.exercises?.length || 0), 0);
+  const completedCount = completedProgress.length;
+  const remainingCount = Math.max(0, totalAssigned - completedCount);
+  const completionPercentage = totalAssigned > 0 ? Math.min(100, Math.round((completedCount / totalAssigned) * 100)) : 0;
+
+  const { currentStreak, bestStreak } = calculateStreaks(completedProgress);
+  const weekly = buildWeeklyMatrix(completedProgress, plans);
+  const monthly = buildMonthlyStats(completedProgress, currentStreak);
+  const completionTrend = buildCompletionTrends(completedProgress);
+  const painTrend = buildPainTrendAnalytics(progress);
+  const mobilityTrend = buildMobilityTrendAnalytics(progress);
+
+  const weeklyCompletionPercentage = weekly.reduce((acc, d) => acc + d.completed, 0);
+  const totalWeeklyTarget = weekly.reduce((acc, d) => acc + d.target, 0) || 1;
+  const weeklyRate = Math.min(100, Math.round((weeklyCompletionPercentage / totalWeeklyTarget) * 100));
+
+  const overview = {
+    totalAssigned,
+    completed: completedCount,
+    remaining: remainingCount,
+    completionPercentage,
+    currentStreak,
+    bestStreak,
+    weeklyCompletionPercentage: weeklyRate,
+    monthlyCompletionPercentage: monthly.completionPercentage,
+  };
+
+  return {
+    patient,
+    overview,
+    weekly,
+    monthly,
+    completionTrend,
+    painTrend,
+    mobilityTrend,
+    entries: progress,
+    timeline: buildTimeline(progress),
+    summary: buildSummary(progress, appointments, plans),
+  };
 };
 
 export const getMyProgress = async (req, res) => {
   try {
     const patient = await getPatient(req.user);
     if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
-    res.json(await getProgressPayload(patient._id));
+    const payload = await getProgressPayload(patient._id);
+    res.json(payload);
   } catch (error) {
     res.status(500).json({ message: 'Unable to load progress' });
   }
@@ -121,7 +382,7 @@ export const listTherapistPatientsProgress = async (req, res) => {
     }).populate('user', 'name email').lean();
     const summaries = await Promise.all(patients.map(async (patient) => {
       const payload = await getProgressPayload(patient._id);
-      return { patient: payload.patient, summary: payload.summary, timeline: payload.timeline };
+      return { patient: payload.patient, summary: payload.summary, timeline: payload.timeline, overview: payload.overview };
     }));
     res.json(summaries);
   } catch (error) {

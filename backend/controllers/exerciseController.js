@@ -184,9 +184,52 @@ export const completePatientExercise = async (req, res) => {
   try {
     const { planId, painLevel, mobilityScore, notes } = req.body;
     const patient = await ensurePatientProfile(req.user);
-    const plan = await ExercisePlan.findOne({ _id: planId, patient: patient?._id, status: { $in: ['Active', 'Paused'] } });
-    if (!plan || !plan.exercises.some((item) => String(item.exercise?._id || item.exercise) === String(req.params.exerciseId))) {
-      return res.status(404).json({ message: 'Assigned exercise not found' });
+    if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
+
+    // Validate pain level if provided
+    let parsedPain;
+    if (painLevel !== undefined && painLevel !== '' && painLevel !== null) {
+      parsedPain = Number(painLevel);
+      if (isNaN(parsedPain) || parsedPain < 0 || parsedPain > 10) {
+        return res.status(400).json({ message: 'Pain level must be a valid number between 0 and 10' });
+      }
+    }
+
+    // Validate mobility score if provided
+    let parsedMobility;
+    if (mobilityScore !== undefined && mobilityScore !== '' && mobilityScore !== null) {
+      parsedMobility = Number(mobilityScore);
+      if (isNaN(parsedMobility) || parsedMobility < 0 || parsedMobility > 100) {
+        return res.status(400).json({ message: 'Mobility score must be a valid number between 0 and 100' });
+      }
+    }
+
+    // Sanitize optional notes
+    const sanitizedNotes = typeof notes === 'string' ? notes.trim().slice(0, 500) : undefined;
+
+    // Look up plan explicitly or by exercise membership
+    let plan;
+    if (planId) {
+      plan = await ExercisePlan.findOne({
+        _id: planId,
+        patient: patient._id,
+        status: { $in: ['Active', 'Paused'] },
+      });
+    } else {
+      plan = await ExercisePlan.findOne({
+        patient: patient._id,
+        status: { $in: ['Active', 'Paused'] },
+        'exercises.exercise': req.params.exerciseId,
+      });
+    }
+
+    if (
+      !plan ||
+      !plan.exercises.some(
+        (item) => String(item.exercise?._id || item.exercise) === String(req.params.exerciseId)
+      )
+    ) {
+      return res.status(404).json({ message: 'Assigned exercise not found for this patient' });
     }
 
     const progress = await Progress.create({
@@ -194,21 +237,32 @@ export const completePatientExercise = async (req, res) => {
       exercise: req.params.exerciseId,
       exercisePlan: plan._id,
       completionStatus: 'Completed',
-      painLevel: painLevel === '' || painLevel === undefined ? undefined : Number(painLevel),
-      mobilityScore: mobilityScore === '' || mobilityScore === undefined ? undefined : Number(mobilityScore),
-      notes,
+      painLevel: parsedPain,
+      mobilityScore: parsedMobility,
+      notes: sanitizedNotes,
+      datePerformed: new Date(),
     });
-    const populatedPlan = await ExercisePlan.findById(plan._id).populate({ path: 'therapist', select: 'user' });
+
+    const populatedProgress = await Progress.findById(progress._id).populate(
+      'exercise',
+      'name description category difficulty duration sets reps instructions precautions videoUrl imageUrl targetBodyPart'
+    );
+
+    const populatedPlan = await ExercisePlan.findById(plan._id).populate({
+      path: 'therapist',
+      select: 'user',
+    });
     if (populatedPlan?.therapist?.user) {
       await createNotification({
         recipient: populatedPlan.therapist.user,
         type: 'ProgressUpdate',
         title: 'Exercise completed',
-        message: 'A patient completed an assigned exercise and recorded a new progress update.',
+        message: `${req.user.name || 'A patient'} completed an assigned exercise and recorded progress.`,
         relatedEntity: { entityType: 'ExercisePlan', entityId: plan._id },
       });
     }
-    res.status(201).json(progress);
+
+    res.status(201).json(populatedProgress || progress);
   } catch (error) {
     res.status(400).json({ message: error.message || 'Unable to mark exercise complete' });
   }

@@ -1,5 +1,3 @@
-import fetch from 'node-fetch'; // or use global fetch in Node 18+
-
 const API_BASE = 'http://localhost:5000/api';
 
 async function testAll() {
