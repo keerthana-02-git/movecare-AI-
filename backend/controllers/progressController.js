@@ -1,4 +1,4 @@
-import { Appointment, ExercisePlan, Patient, Progress, Therapist } from '../models/index.js';
+import { Appointment, ExercisePlan, PainJournal, Patient, Progress, Therapist } from '../models/index.js';
 import { ensureTherapistProfile } from './authController.js';
 import { ensurePatientProfile } from './patientController.js';
 
@@ -173,12 +173,30 @@ const buildCompletionTrends = (completedProgress) => {
   };
 };
 
-const buildPainTrendAnalytics = (progress) => {
-  const trackedPain = progress
+const buildPainTrendAnalytics = (progress, journals = []) => {
+  const painFromProgress = progress
     .filter((entry) => entry.painLevel !== undefined && entry.painLevel !== null)
-    .sort((a, b) => new Date(a.datePerformed) - new Date(b.datePerformed));
+    .map((entry) => ({
+      date: toISODate(entry.datePerformed),
+      timestamp: new Date(entry.datePerformed).getTime(),
+      painLevel: Number(entry.painLevel),
+      exerciseName: entry.exercise?.name || 'Assigned Exercise',
+      notes: entry.notes || '',
+    }));
 
-  if (trackedPain.length === 0) {
+  const painFromJournals = journals
+    .filter((entry) => entry.painLevel !== undefined && entry.painLevel !== null)
+    .map((entry) => ({
+      date: entry.dateString || toISODate(entry.date),
+      timestamp: new Date(entry.date || entry.createdAt).getTime(),
+      painLevel: Number(entry.painLevel),
+      exerciseName: `Daily Journal (${entry.bodyPart})`,
+      notes: entry.notes || '',
+    }));
+
+  const combined = [...painFromProgress, ...painFromJournals].sort((a, b) => a.timestamp - b.timestamp);
+
+  if (combined.length === 0) {
     return {
       averagePain: null,
       latestPain: null,
@@ -188,10 +206,10 @@ const buildPainTrendAnalytics = (progress) => {
     };
   }
 
-  const painSum = trackedPain.reduce((sum, p) => sum + Number(p.painLevel), 0);
-  const averagePain = round(painSum / trackedPain.length);
-  const latestEntry = trackedPain[trackedPain.length - 1];
-  const latestPain = Number(latestEntry.painLevel);
+  const painSum = combined.reduce((sum, p) => sum + p.painLevel, 0);
+  const averagePain = round(painSum / combined.length);
+  const latestEntry = combined[combined.length - 1];
+  const latestPain = latestEntry.painLevel;
 
   let painSeverity = 'Mild';
   if (averagePain === 0) painSeverity = 'None';
@@ -199,11 +217,11 @@ const buildPainTrendAnalytics = (progress) => {
   else if (averagePain <= 6) painSeverity = 'Moderate';
   else painSeverity = 'Severe';
 
-  const history = trackedPain.map((entry) => ({
-    date: toISODate(entry.datePerformed),
-    painLevel: Number(entry.painLevel),
-    exerciseName: entry.exercise?.name || 'Assigned Exercise',
-    notes: entry.notes || '',
+  const history = combined.map((entry) => ({
+    date: entry.date,
+    painLevel: entry.painLevel,
+    exerciseName: entry.exerciseName,
+    notes: entry.notes,
   }));
 
   return {
@@ -211,16 +229,32 @@ const buildPainTrendAnalytics = (progress) => {
     latestPain,
     painSeverity,
     history,
-    totalRecords: trackedPain.length,
+    totalRecords: combined.length,
   };
 };
 
-const buildMobilityTrendAnalytics = (progress) => {
-  const trackedMobility = progress
+const buildMobilityTrendAnalytics = (progress, journals = []) => {
+  const mobilityFromProgress = progress
     .filter((entry) => entry.mobilityScore !== undefined && entry.mobilityScore !== null)
-    .sort((a, b) => new Date(a.datePerformed) - new Date(b.datePerformed));
+    .map((entry) => ({
+      date: toISODate(entry.datePerformed),
+      timestamp: new Date(entry.datePerformed).getTime(),
+      mobilityScore: Number(entry.mobilityScore),
+      exerciseName: entry.exercise?.name || 'Assigned Exercise',
+    }));
 
-  if (trackedMobility.length === 0) {
+  const mobilityFromJournals = journals
+    .filter((entry) => entry.mobilityScore !== undefined && entry.mobilityScore !== null)
+    .map((entry) => ({
+      date: entry.dateString || toISODate(entry.date),
+      timestamp: new Date(entry.date || entry.createdAt).getTime(),
+      mobilityScore: Number(entry.mobilityScore),
+      exerciseName: `Daily Journal (${entry.bodyPart})`,
+    }));
+
+  const combined = [...mobilityFromProgress, ...mobilityFromJournals].sort((a, b) => a.timestamp - b.timestamp);
+
+  if (combined.length === 0) {
     return {
       averageMobility: null,
       latestMobility: null,
@@ -229,20 +263,20 @@ const buildMobilityTrendAnalytics = (progress) => {
     };
   }
 
-  const mobilitySum = trackedMobility.reduce((sum, p) => sum + Number(p.mobilityScore), 0);
-  const averageMobility = Math.round(mobilitySum / trackedMobility.length);
-  const latestEntry = trackedMobility[trackedMobility.length - 1];
-  const latestMobility = Number(latestEntry.mobilityScore);
+  const mobilitySum = combined.reduce((sum, p) => sum + p.mobilityScore, 0);
+  const averageMobility = Math.round(mobilitySum / combined.length);
+  const latestEntry = combined[combined.length - 1];
+  const latestMobility = latestEntry.mobilityScore;
 
   let mobilityStatus = 'Stable';
   if (averageMobility >= 80) mobilityStatus = 'Optimal';
   else if (averageMobility >= 60) mobilityStatus = 'Stable';
   else mobilityStatus = 'Needs attention';
 
-  const history = trackedMobility.map((entry) => ({
-    date: toISODate(entry.datePerformed),
-    mobilityScore: Number(entry.mobilityScore),
-    exerciseName: entry.exercise?.name || 'Assigned Exercise',
+  const history = combined.map((entry) => ({
+    date: entry.date,
+    mobilityScore: entry.mobilityScore,
+    exerciseName: entry.exerciseName,
   }));
 
   return {
@@ -250,11 +284,11 @@ const buildMobilityTrendAnalytics = (progress) => {
     latestMobility,
     mobilityStatus,
     history,
-    totalRecords: trackedMobility.length,
+    totalRecords: combined.length,
   };
 };
 
-const buildSummary = (progress, appointments, plans) => {
+const buildSummary = (progress, appointments, plans, journals = []) => {
   const completed = progress.filter((entry) => entry.completionStatus === 'Completed');
   const trackedPain = progress.filter((entry) => entry.painLevel !== undefined && entry.painLevel !== null);
   const trackedMobility = progress.filter((entry) => entry.mobilityScore !== undefined && entry.mobilityScore !== null);
@@ -298,11 +332,12 @@ const buildTimeline = (progress) => {
 };
 
 export const getProgressPayload = async (patientId) => {
-  const [patient, progress, appointments, plans] = await Promise.all([
+  const [patient, progress, appointments, plans, journals] = await Promise.all([
     Patient.findById(patientId).populate('user', 'name email').lean(),
     Progress.find({ patient: patientId }).sort({ datePerformed: 1 }).populate('exercise', 'name category targetBodyPart difficulty').lean(),
     Appointment.find({ patient: patientId }).sort({ appointmentDate: 1 }).lean(),
     ExercisePlan.find({ patient: patientId, status: { $in: ['Active', 'Paused', 'Completed'] } }).lean(),
+    PainJournal.find({ patient: patientId }).sort({ dateString: 1, createdAt: 1 }).lean(),
   ]);
 
   const completedProgress = progress.filter((p) => p.completionStatus === 'Completed');
@@ -315,8 +350,8 @@ export const getProgressPayload = async (patientId) => {
   const weekly = buildWeeklyMatrix(completedProgress, plans);
   const monthly = buildMonthlyStats(completedProgress, currentStreak);
   const completionTrend = buildCompletionTrends(completedProgress);
-  const painTrend = buildPainTrendAnalytics(progress);
-  const mobilityTrend = buildMobilityTrendAnalytics(progress);
+  const painTrend = buildPainTrendAnalytics(progress, journals);
+  const mobilityTrend = buildMobilityTrendAnalytics(progress, journals);
 
   const weeklyCompletionPercentage = weekly.reduce((acc, d) => acc + d.completed, 0);
   const totalWeeklyTarget = weekly.reduce((acc, d) => acc + d.target, 0) || 1;

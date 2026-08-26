@@ -2,6 +2,7 @@ import {
   Appointment,
   ExercisePlan,
   Notification,
+  PainJournal,
   Patient,
   Progress,
 } from '../models/index.js';
@@ -35,8 +36,10 @@ export const getPatientDashboard = async (req, res) => {
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-    const [plans, appointments, progress, notifications] = await Promise.all([
-      ExercisePlan.find({ patient: patient._id, status: { $in: ['Active', 'Paused'] } })
+    const patientIds = [patient._id, req.user._id];
+
+    const [plans, appointments, progress, notifications, journalEntries] = await Promise.all([
+      ExercisePlan.find({ patient: { $in: patientIds }, status: { $in: ['Active', 'Paused'] } })
         .sort({ startDate: -1 })
         .populate({
           path: 'therapist',
@@ -45,7 +48,7 @@ export const getPatientDashboard = async (req, res) => {
         .populate('exercises.exercise')
         .lean(),
       Appointment.find({
-        patient: patient._id,
+        patient: { $in: patientIds },
         appointmentDate: { $gte: startOfToday },
         status: { $nin: ['Cancelled', 'NoShow'] },
       })
@@ -56,7 +59,7 @@ export const getPatientDashboard = async (req, res) => {
           populate: { path: 'user', select: 'name email' },
         })
         .lean(),
-      Progress.find({ patient: patient._id })
+      Progress.find({ patient: { $in: patientIds } })
         .sort({ datePerformed: -1 })
         .limit(100)
         .populate('exercise', 'name category targetBodyPart difficulty duration sets reps')
@@ -65,7 +68,23 @@ export const getPatientDashboard = async (req, res) => {
         .sort({ isRead: 1, createdAt: -1 })
         .limit(10)
         .lean(),
+      PainJournal.find({ patient: { $in: patientIds } })
+        .sort({ dateString: -1, createdAt: -1 })
+        .limit(10)
+        .lean(),
     ]);
+
+    const toISODate = (d) => {
+      const dateObj = new Date(d);
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const todayStr = toISODate(now);
+    const todayJournalEntry = journalEntries.find((j) => j.dateString === todayStr) || null;
+    const latestJournalEntry = journalEntries[0] || null;
 
     // 1. Flatten all assigned exercises from active plans
     const allAssignedExercises = [];
@@ -169,7 +188,7 @@ export const getPatientDashboard = async (req, res) => {
 
     const daysElapsedSince = (startDate) => {
       const start = new Date(new Date(startDate).getFullYear(), new Date(startDate).getMonth(), new Date(startDate).getDate());
-      return Math.max(0, Math.floor((startOfToday - start) / 86400000));
+      return Math.max(0, Math.floor((startOfToday.getTime() - start.getTime()) / 86400000));
     };
 
     const isScheduledToday = (item) => {
@@ -182,27 +201,28 @@ export const getPatientDashboard = async (req, res) => {
       return true;
     };
 
-    const todaysExercisesList = allAssignedExercises
-      .filter(isScheduledToday)
-      .map((item) => {
-        const exerciseIdStr = String(item.exercise?._id || item.exercise);
-        const isCompletedToday = todayCompletedExerciseIds.has(exerciseIdStr);
-        const todayEntry = todayCompletedProgress.find(
-          (p) => String(p.exercise?._id || p.exercise) === exerciseIdStr
-        );
-        return {
-          planId: item.planId,
-          planName: item.planName,
-          frequency: item.frequency,
-          order: item.order,
-          exercise: item.exercise,
-          isCompletedToday,
-          completedAt: todayEntry?.datePerformed || null,
-          repsCompleted: todayEntry?.repsCompleted || null,
-          setsCompleted: todayEntry?.setsCompleted || null,
-          painLevel: todayEntry?.painLevel ?? null,
-        };
-      });
+    const todaysFiltered = allAssignedExercises.filter(isScheduledToday);
+    const activeDailyList = todaysFiltered.length > 0 ? todaysFiltered : allAssignedExercises;
+
+    const todaysExercisesList = activeDailyList.map((item) => {
+      const exerciseIdStr = String(item.exercise?._id || item.exercise);
+      const isCompletedToday = todayCompletedExerciseIds.has(exerciseIdStr);
+      const todayEntry = todayCompletedProgress.find(
+        (p) => String(p.exercise?._id || p.exercise) === exerciseIdStr
+      );
+      return {
+        planId: item.planId,
+        planName: item.planName,
+        frequency: item.frequency,
+        order: item.order,
+        exercise: item.exercise,
+        isCompletedToday,
+        completedAt: todayEntry?.datePerformed || null,
+        repsCompleted: todayEntry?.repsCompleted || null,
+        setsCompleted: todayEntry?.setsCompleted || null,
+        painLevel: todayEntry?.painLevel ?? null,
+      };
+    });
 
     const todayTotal = todaysExercisesList.length;
     const todayCompleted = todaysExercisesList.filter((e) => e.isCompletedToday).length;
@@ -345,6 +365,12 @@ export const getPatientDashboard = async (req, res) => {
       exercises,
       appointment: nextAppointment,
       progressSummary,
+      painJournal: {
+        todayEntry: todayJournalEntry,
+        hasTodayEntry: Boolean(todayJournalEntry),
+        latestEntry: latestJournalEntry,
+        totalEntries: journalEntries.length,
+      },
       // Backward compatibility fields
       patient,
       plans,

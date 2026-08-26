@@ -26,6 +26,9 @@ import MonthlySummaryCard from './components/progress/MonthlySummaryCard'
 import CompletionTrendChart from './components/progress/CompletionTrendChart'
 import PainTrendCard from './components/progress/PainTrendCard'
 import MobilityTrendCard from './components/progress/MobilityTrendCard'
+import PainJournalCard from './components/journal/PainJournalCard'
+import PainJournalFormModal from './components/journal/PainJournalFormModal'
+import PainJournalPage from './components/journal/PainJournalPage'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 
@@ -157,6 +160,7 @@ function Navbar({ user, onLogout }) {
               {user.role === 'Patient' && <NavLink to="/appointments" className="secondary-btn small">Appointments</NavLink>}
               {user.role === 'Therapist' && <NavLink to="/patient-progress" className="secondary-btn small">Progress</NavLink>}
               {user.role === 'Patient' && <NavLink to="/progress" className="secondary-btn small">Progress</NavLink>}
+              {user.role === 'Patient' && <NavLink to="/pain-journal" className="secondary-btn small">Pain journal</NavLink>}
               {user.role === 'Patient' && <NavLink to="/ai-assistant" className="secondary-btn small">AI guide</NavLink>}
               {user.role === 'Therapist' && <NavLink to="/monitoring" className="secondary-btn small">Live monitor</NavLink>}
               {user.role === 'Patient' && <NavLink to="/monitoring" className="secondary-btn small">Live monitor</NavLink>}
@@ -780,16 +784,32 @@ function AuthPage({ mode, onAuthComplete }) {
           </div>
 
           {isRegister && (
-            <label>
-              Full name
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                placeholder="Enter your name"
-              />
-            </label>
+            <>
+              <label>
+                Full name
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  placeholder="Enter your name"
+                  required
+                />
+              </label>
+
+              <label>
+                Role / Account Type
+                <select
+                  name="role"
+                  value={formData.role}
+                  onChange={handleChange}
+                >
+                  <option value="Patient">Patient</option>
+                  <option value="Therapist">Physical Therapist</option>
+                  <option value="Admin">Administrator</option>
+                </select>
+              </label>
+            </>
           )}
 
           <label>
@@ -1040,14 +1060,15 @@ function AdminDashboardPage({ user }) {
   if (!data) return <LoadingDashboard />
 
   const tabs = [
-    ['users', 'Users'], ['therapists', 'Therapists'], ['exercises', 'Exercises'], ['appointments', 'Appointments'],
+    ['users', 'Users'], ['patients', 'Patients'], ['therapists', 'Therapists'], ['exercises', 'Exercises'], ['appointments', 'Appointments'],
   ]
   return <main className="page-shell admin-page"><div className="container management-wrap">
     <div className="dashboard-hero"><div><span className="eyebrow accent">Administration</span><h2>Good to see you, {user.name.split(' ')[0]}.</h2><p>Manage access, care operations, and platform activity from one workspace.</p></div><div className="dashboard-avatar" aria-hidden="true">{user.name.charAt(0)}</div></div>
     {error && <div className="form-error" role="alert">{error}</div>}{notice && <div className="success-message" role="status">{notice}</div>}
     <div className="admin-stat-grid"><ProgressMetric label="Total users" value={data.stats.users} /><ProgressMetric label="Patients" value={data.stats.patients} /><ProgressMetric label="Therapists" value={data.stats.therapists} /><ProgressMetric label="Available therapists" value={data.stats.availableTherapists} /><ProgressMetric label="Active plans" value={data.stats.activePlans} /><ProgressMetric label="Appointments" value={data.stats.appointments} /></div>
-    <section className="management-panel admin-workspace"><div className="admin-tabs" role="tablist" aria-label="Administration sections">{tabs.map(([key, label]) => <button type="button" role="tab" aria-selected={view === key} className={view === key ? 'admin-tab active' : 'admin-tab'} key={key} onClick={() => setView(key)}>{label}<span>{key === 'users' ? data.users.length : key === 'therapists' ? data.therapists.length : key === 'exercises' ? data.exercises.length : data.appointments.length}</span></button>)}</div>
+    <section className="management-panel admin-workspace"><div className="admin-tabs" role="tablist" aria-label="Administration sections">{tabs.map(([key, label]) => <button type="button" role="tab" aria-selected={view === key} className={view === key ? 'admin-tab active' : 'admin-tab'} key={key} onClick={() => setView(key)}>{label}<span>{key === 'users' ? data.users.length : key === 'patients' ? (data.patients || []).length : key === 'therapists' ? data.therapists.length : key === 'exercises' ? data.exercises.length : data.appointments.length}</span></button>)}</div>
       {view === 'users' && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>User</th><th>Role</th><th>Joined</th><th>Manage</th></tr></thead><tbody>{data.users.map((item) => <tr key={item._id}><td><strong>{item.name}</strong><small>{item.email}</small></td><td><span className="role-tag">{item.role}</span></td><td>{formatDate(item.createdAt)}</td><td><select value={item.role} onChange={(event) => update(`/admin/users/${item._id}/role`, { method: 'PATCH', body: JSON.stringify({ role: event.target.value }) }, 'User role updated.')}><option>Patient</option><option>Therapist</option><option>Admin</option></select></td></tr>)}</tbody></table></div>}
+      {view === 'patients' && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Patient</th><th>Condition & Injury</th><th>Therapist</th><th>Joined</th><th>Status</th></tr></thead><tbody>{(data.patients || []).map((item) => <tr key={item._id}><td><strong>{item.user?.name || 'Patient'}</strong><small>{item.user?.email}</small></td><td><strong>{item.medicalCondition}</strong><small>{item.injuryDescription || 'No notes'}</small></td><td>{item.assignedTherapist?.user?.name || <span className="empty-dash">Unassigned</span>}</td><td>{formatDate(item.createdAt)}</td><td><span className="role-tag">{item.status || 'Active'}</span></td></tr>)}</tbody></table>{!(data.patients || []).length && <p className="empty-state">No patient records found.</p>}</div>}
       {view === 'therapists' && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Therapist</th><th>Specialization</th><th>Patients</th><th>Status</th></tr></thead><tbody>{data.therapists.map((item) => <tr key={item._id}><td><strong>{item.user?.name}</strong><small>{item.user?.email} · {item.licenseNumber}</small></td><td>{item.specialization}</td><td>{item.patientsAssigned?.length || 0}</td><td><select value={item.status} onChange={(event) => update(`/admin/therapists/${item._id}/status`, { method: 'PATCH', body: JSON.stringify({ status: event.target.value }) }, 'Therapist status updated.')}><option>Available</option><option>Unavailable</option><option>OnLeave</option></select></td></tr>)}</tbody></table></div>}
       {view === 'exercises' && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Exercise</th><th>Category</th><th>Difficulty</th><th>Created by</th><th>Manage</th></tr></thead><tbody>{data.exercises.map((item) => <tr key={item._id}><td><strong>{item.name}</strong><small>{item.targetBodyPart} · {item.duration} min</small></td><td>{item.category}</td><td>{item.difficulty}</td><td>{item.createdBy?.user?.name || 'Unknown'}</td><td><button type="button" className="danger-btn" onClick={() => removeExercise(item)}>Delete</button></td></tr>)}</tbody></table></div>}
       {view === 'appointments' && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Date</th><th>Patient</th><th>Therapist</th><th>Type</th><th>Status</th></tr></thead><tbody>{data.appointments.map((item) => <tr key={item._id}><td><strong>{formatDate(item.appointmentDate)}</strong><small>{item.startTime} - {item.endTime}</small></td><td>{item.patient?.user?.name || 'Unknown'}</td><td>{item.therapist?.user?.name || 'Unknown'}</td><td>{item.type}</td><td><AppointmentStatus status={item.status} /></td></tr>)}</tbody></table>{!data.appointments.length && <p className="empty-state">No appointments recorded yet.</p>}</div>}
@@ -1130,6 +1151,43 @@ function PatientDashboardPage({ user }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Journal Modal State
+  const [journalModalOpen, setJournalModalOpen] = useState(false)
+  const [journalModalEntry, setJournalModalEntry] = useState(null)
+  const [journalSubmitting, setJournalSubmitting] = useState(false)
+  const [journalError, setJournalError] = useState('')
+
+  const handleOpenJournalModal = (entry) => {
+    setJournalModalEntry(entry || dashboard?.painJournal?.todayEntry || null)
+    setJournalError('')
+    setJournalModalOpen(true)
+  }
+
+  const handleSaveJournal = async (formData) => {
+    try {
+      setJournalSubmitting(true)
+      setJournalError('')
+      if (formData.entryId) {
+        await apiRequest(`/patients/me/pain-journal/${formData.entryId}`, {
+          method: 'PUT',
+          body: JSON.stringify(formData),
+        })
+      } else {
+        await apiRequest('/patients/me/pain-journal', {
+          method: 'POST',
+          body: JSON.stringify(formData),
+        })
+      }
+      setJournalModalOpen(false)
+      setJournalModalEntry(null)
+      await loadDashboard()
+    } catch (err) {
+      setJournalError(err.message || 'Unable to save journal entry.')
+    } finally {
+      setJournalSubmitting(false)
+    }
+  }
+
   const loadDashboard = async () => {
     const token = localStorage.getItem('movecare-token')
     try {
@@ -1204,10 +1262,8 @@ function PatientDashboardPage({ user }) {
   const recoveryGoal = dashboard?.recoveryGoal || (dashboard?.plans?.[0]?.goals || dashboard?.patient?.medicalCondition ? {
     goal: dashboard.plans?.[0]?.goals || `Recovery for ${dashboard.patient?.medicalCondition}`,
     condition: dashboard?.patient?.medicalCondition !== 'Profile setup required' ? dashboard.patient.medicalCondition : null,
-    planName: dashboard?.plans?.[0]?.name,
-    planStartDate: dashboard?.plans?.[0]?.startDate,
-    planEndDate: dashboard?.plans?.[0]?.endDate,
-    notes: dashboard?.plans?.[0]?.notes,
+    targetDate: dashboard.plans?.[0]?.endDate || null,
+    plansCount: Array.isArray(dashboard?.plans) ? dashboard.plans.length : 0,
   } : null)
 
   const exercises = dashboard?.exercises || {
@@ -1270,18 +1326,18 @@ function PatientDashboardPage({ user }) {
               <small>{exercises.todayRemaining > 0 ? `${exercises.todayRemaining} pending today` : 'View routine'}</small>
             </div>
           </NavLink>
+          <NavLink to="/pain-journal" className="quick-action-item">
+            <span className="action-icon" aria-hidden="true">📖</span>
+            <div>
+              <strong>Pain Journal</strong>
+              <small>{dashboard?.painJournal?.hasTodayEntry ? `Pain: ${dashboard.painJournal.todayEntry.painLevel}/10` : 'Daily check-in'}</small>
+            </div>
+          </NavLink>
           <NavLink to="/appointments" className="quick-action-item">
             <span className="action-icon" aria-hidden="true">📅</span>
             <div>
               <strong>Consultations</strong>
               <small>{appointment ? '1 scheduled' : 'Book visit'}</small>
-            </div>
-          </NavLink>
-          <NavLink to="/progress" className="quick-action-item">
-            <span className="action-icon" aria-hidden="true">📊</span>
-            <div>
-              <strong>Recovery Progress</strong>
-              <small>{recovery.completionPercentage}% adherence</small>
             </div>
           </NavLink>
           <NavLink to="/ai-assistant" className="quick-action-item">
@@ -1293,7 +1349,7 @@ function PatientDashboardPage({ user }) {
           </NavLink>
         </nav>
 
-        {/* Dynamic 6-Component Dashboard Grid */}
+        {/* Dynamic Multi-Component Dashboard Grid */}
         <div className="patient-dashboard-grid">
           {/* 1. Recovery Overview */}
           <RecoveryOverview recovery={recovery} />
@@ -1318,15 +1374,38 @@ function PatientDashboardPage({ user }) {
             }}
           />
 
-          {/* 4. Next Appointment */}
+          {/* 4. Pain & Mobility Journal */}
+          <PainJournalCard
+            todayEntry={dashboard?.painJournal?.todayEntry}
+            onOpenLogModal={handleOpenJournalModal}
+          />
+
+          {/* 5. Next Appointment */}
           <NextAppointment appointment={appointment} />
 
-          {/* 5. Patient Profile Summary */}
-          <ProfileSummary profile={profile} user={user} />
+          {/* 6. Patient Profile Summary */}
+          <ProfileSummary profile={profile} user={user} onProfileUpdated={loadDashboard} />
 
-          {/* 6. Progress Summary */}
+          {/* 7. Progress Summary */}
           <ProgressSummary progressSummary={progressSummary} />
         </div>
+
+        {/* Pain Journal Check-in Modal */}
+        {journalModalOpen && (
+          <PainJournalFormModal
+            initialEntry={journalModalEntry}
+            onClose={() => {
+              if (!journalSubmitting) {
+                setJournalModalOpen(false)
+                setJournalModalEntry(null)
+                setJournalError('')
+              }
+            }}
+            onSubmit={handleSaveJournal}
+            submitting={journalSubmitting}
+            error={journalError}
+          />
+        )}
 
         {/* Notifications preview if present */}
         {notifications.length > 0 && (
@@ -1398,10 +1477,20 @@ function ExerciseForm({ form, setForm, onSubmit, editing, onCancel, loading }) {
 }
 
 function ExerciseManagementPage() {
+  const todayDateStr = new Date().toISOString().split('T')[0]
+  const thirtyDaysLaterStr = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
+
   const [exercises, setExercises] = useState([])
   const [options, setOptions] = useState({ patients: [], exercises: [] })
   const [form, setForm] = useState(emptyExercise)
-  const [assignment, setAssignment] = useState({ patientId: '', exerciseId: '', planName: '', startDate: '', endDate: '', frequency: 'Daily' })
+  const [assignment, setAssignment] = useState({
+    patientId: '',
+    exerciseId: '',
+    planName: '',
+    startDate: todayDateStr,
+    endDate: thirtyDaysLaterStr,
+    frequency: 'Daily',
+  })
   const [editingId, setEditingId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -1411,56 +1500,245 @@ function ExerciseManagementPage() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const [exerciseData, optionData] = await Promise.all([apiRequest('/exercises'), apiRequest('/exercises/assignment-options')])
-      setExercises(exerciseData); setOptions(optionData); setError('')
-    } catch (loadError) { setError(loadError.message) } finally { setLoading(false) }
+      const [exerciseData, optionData] = await Promise.all([
+        apiRequest('/exercises'),
+        apiRequest('/exercises/assignment-options'),
+      ])
+      setExercises(exerciseData)
+      setOptions(optionData)
+      setError('')
+    } catch (loadError) {
+      setError(loadError.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    loadData()
+  }, [])
 
   const handleExerciseSubmit = async (event) => {
     event.preventDefault()
     try {
-      setSaving(true); setError(''); setNotice('')
-      const saved = await apiRequest(editingId ? `/exercises/${editingId}` : '/exercises', { method: editingId ? 'PUT' : 'POST', body: JSON.stringify(form) })
-      setExercises((current) => editingId ? current.map((item) => item._id === saved._id ? saved : item) : [saved, ...current])
-      setForm(emptyExercise); setEditingId(null); setNotice(editingId ? 'Exercise updated.' : 'Exercise created.')
-    } catch (saveError) { setError(saveError.message) } finally { setSaving(false) }
+      setSaving(true)
+      setError('')
+      setNotice('')
+      const saved = await apiRequest(editingId ? `/exercises/${editingId}` : '/exercises', {
+        method: editingId ? 'PUT' : 'POST',
+        body: JSON.stringify(form),
+      })
+      setExercises((current) =>
+        editingId ? current.map((item) => (item._id === saved._id ? saved : item)) : [saved, ...current]
+      )
+      setForm(emptyExercise)
+      setEditingId(null)
+      setNotice(editingId ? 'Exercise updated.' : 'Exercise created.')
+    } catch (saveError) {
+      setError(saveError.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleDelete = async (exercise) => {
     if (!window.confirm(`Delete ${exercise.name}?`)) return
-    try { await apiRequest(`/exercises/${exercise._id}`, { method: 'DELETE' }); setExercises((current) => current.filter((item) => item._id !== exercise._id)); setNotice('Exercise deleted.') } catch (deleteError) { setError(deleteError.message) }
+    try {
+      await apiRequest(`/exercises/${exercise._id}`, { method: 'DELETE' })
+      setExercises((current) => current.filter((item) => item._id !== exercise._id))
+      setNotice('Exercise deleted.')
+    } catch (deleteError) {
+      setError(deleteError.message)
+    }
   }
 
   const handleAssignment = async (event) => {
     event.preventDefault()
     try {
-      setSaving(true); setError(''); setNotice('')
+      setSaving(true)
+      setError('')
+      setNotice('')
       await apiRequest('/exercises/assign', { method: 'POST', body: JSON.stringify(assignment) })
-      setAssignment({ patientId: '', exerciseId: '', planName: '', startDate: '', endDate: '', frequency: 'Daily' }); setNotice('Exercise assigned to the patient.')
-    } catch (assignmentError) { setError(assignmentError.message) } finally { setSaving(false) }
+      setAssignment({
+        patientId: '',
+        exerciseId: '',
+        planName: '',
+        startDate: todayDateStr,
+        endDate: thirtyDaysLaterStr,
+        frequency: 'Daily',
+      })
+      setNotice('Exercise assigned to the patient successfully.')
+      await loadData()
+    } catch (assignmentError) {
+      setError(assignmentError.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
-    <main className="page-shell"><div className="container management-wrap">
-      <div className="management-heading"><div><span className="eyebrow accent">Therapist workspace</span><h2>Exercise management</h2><p>Create a library of clear, trackable exercises and assign them to your patients.</p></div></div>
-      {error && <div className="form-error" role="alert">{error}</div>}{notice && <div className="success-message" role="status">{notice}</div>}
-      <div className="management-layout">
-        <section className="management-panel"><h3>{editingId ? 'Edit exercise' : 'Create exercise'}</h3><ExerciseForm form={form} setForm={setForm} onSubmit={handleExerciseSubmit} editing={Boolean(editingId)} onCancel={() => { setEditingId(null); setForm(emptyExercise) }} loading={saving} /></section>
-        <section className="management-panel"><h3>Assign an exercise</h3><form className="assignment-form" onSubmit={handleAssignment}>
-          <label>Patient<select value={assignment.patientId} onChange={(event) => setAssignment({ ...assignment, patientId: event.target.value })} required><option value="">Select patient</option>{options.patients.map((patient) => <option key={patient._id} value={patient._id}>{patient.user?.name || patient.user?.email}</option>)}</select></label>
-          <label>Exercise<select value={assignment.exerciseId} onChange={(event) => setAssignment({ ...assignment, exerciseId: event.target.value })} required><option value="">Select exercise</option>{options.exercises.map((exercise) => <option key={exercise._id} value={exercise._id}>{exercise.name}</option>)}</select></label>
-          <label>Plan name<input value={assignment.planName} onChange={(event) => setAssignment({ ...assignment, planName: event.target.value })} placeholder="e.g. Knee recovery week 1" required /></label>
-          <div className="form-grid"><label>Start date<input type="date" value={assignment.startDate} onChange={(event) => setAssignment({ ...assignment, startDate: event.target.value })} required /></label><label>End date<input type="date" value={assignment.endDate} onChange={(event) => setAssignment({ ...assignment, endDate: event.target.value })} required /></label></div>
-          <label>Frequency<select value={assignment.frequency} onChange={(event) => setAssignment({ ...assignment, frequency: event.target.value })}><option>Daily</option><option value="Every2Days">Every 2 days</option><option value="EveryOtherDay">Every other day</option><option>Twice</option><option>Weekly</option></select></label>
-          <button className="primary-btn" disabled={saving || !options.patients.length}>{saving ? 'Assigning...' : 'Assign exercise'}</button>
-        </form></section>
+    <main className="page-shell">
+      <div className="container management-wrap">
+        <div className="management-heading">
+          <div>
+            <span className="eyebrow accent">Therapist workspace</span>
+            <h2>Exercise management</h2>
+            <p>Create a library of clear, trackable exercises and assign them to your patients.</p>
+          </div>
+        </div>
+        {error && <div className="form-error" role="alert">{error}</div>}
+        {notice && <div className="success-message" role="status">{notice}</div>}
+        <div className="management-layout">
+          <section className="management-panel">
+            <h3>{editingId ? 'Edit exercise' : 'Create exercise'}</h3>
+            <ExerciseForm
+              form={form}
+              setForm={setForm}
+              onSubmit={handleExerciseSubmit}
+              editing={Boolean(editingId)}
+              onCancel={() => {
+                setEditingId(null)
+                setForm(emptyExercise)
+              }}
+              loading={saving}
+            />
+          </section>
+          <section className="management-panel">
+            <h3>Assign an exercise</h3>
+            <form className="assignment-form" onSubmit={handleAssignment}>
+              <label>
+                Patient
+                <select
+                  value={assignment.patientId}
+                  onChange={(event) => setAssignment({ ...assignment, patientId: event.target.value })}
+                  required
+                >
+                  <option value="">Select patient</option>
+                  {options.patients.map((patient) => (
+                    <option key={patient._id} value={patient._id}>
+                      {patient.user?.name || patient.user?.email || 'Patient'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Exercise
+                <select
+                  value={assignment.exerciseId}
+                  onChange={(event) => setAssignment({ ...assignment, exerciseId: event.target.value })}
+                  required
+                >
+                  <option value="">Select exercise</option>
+                  {options.exercises.map((exercise) => (
+                    <option key={exercise._id} value={exercise._id}>
+                      {exercise.name} ({exercise.targetBodyPart})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Plan name
+                <input
+                  value={assignment.planName}
+                  onChange={(event) => setAssignment({ ...assignment, planName: event.target.value })}
+                  placeholder="e.g. Knee recovery week 1"
+                  required
+                />
+              </label>
+              <div className="form-grid">
+                <label>
+                  Start date
+                  <input
+                    type="date"
+                    value={assignment.startDate}
+                    onChange={(event) => setAssignment({ ...assignment, startDate: event.target.value })}
+                    required
+                  />
+                </label>
+                <label>
+                  End date
+                  <input
+                    type="date"
+                    value={assignment.endDate}
+                    onChange={(event) => setAssignment({ ...assignment, endDate: event.target.value })}
+                    required
+                  />
+                </label>
+              </div>
+              <label>
+                Frequency
+                <select
+                  value={assignment.frequency}
+                  onChange={(event) => setAssignment({ ...assignment, frequency: event.target.value })}
+                >
+                  <option value="Daily">Daily</option>
+                  <option value="Every2Days">Every 2 days</option>
+                  <option value="EveryOtherDay">Every other day</option>
+                  <option value="Twice">Twice a week</option>
+                  <option value="Weekly">Weekly</option>
+                </select>
+              </label>
+              <button className="primary-btn" disabled={saving || !options.patients.length}>
+                {saving ? 'Assigning...' : 'Assign exercise'}
+              </button>
+            </form>
+          </section>
+        </div>
+        <section className="management-panel exercise-library">
+          <div className="panel-heading">
+            <div>
+              <span className="card-eyebrow">Your library</span>
+              <h3>Exercises</h3>
+            </div>
+            <span className="count-badge">{loading ? '...' : exercises.length}</span>
+          </div>
+          {loading ? (
+            <div className="dashboard-loading">Loading exercises...</div>
+          ) : exercises.length ? (
+            <div className="exercise-library-grid">
+              {exercises.map((exercise) => (
+                <article className="library-item" key={exercise._id}>
+                  <div className="library-item-top">
+                    <span className="exercise-category">{exercise.category}</span>
+                    <span className="difficulty-tag">{exercise.difficulty}</span>
+                  </div>
+                  <h4>{exercise.name}</h4>
+                  <p>{exercise.description}</p>
+                  <div className="exercise-meta">
+                    <span>{exercise.targetBodyPart}</span>
+                    <span>{exercise.duration} min</span>
+                    <span>
+                      {exercise.sets} × {exercise.reps}
+                    </span>
+                  </div>
+                  <div className="library-actions">
+                    <button
+                      type="button"
+                      className="secondary-btn small"
+                      onClick={() => {
+                        setEditingId(exercise._id)
+                        setForm(exercise)
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="danger-btn"
+                      onClick={() => handleDelete(exercise)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="empty-state">Create your first exercise to start building the library.</p>
+          )}
+        </section>
       </div>
-      <section className="management-panel exercise-library"><div className="panel-heading"><div><span className="card-eyebrow">Your library</span><h3>Exercises</h3></div><span className="count-badge">{loading ? '...' : exercises.length}</span></div>
-        {loading ? <div className="dashboard-loading">Loading exercises...</div> : exercises.length ? <div className="exercise-library-grid">{exercises.map((exercise) => <article className="library-item" key={exercise._id}><div className="library-item-top"><span className="exercise-category">{exercise.category}</span><span className="difficulty-tag">{exercise.difficulty}</span></div><h4>{exercise.name}</h4><p>{exercise.description}</p><div className="exercise-meta"><span>{exercise.targetBodyPart}</span><span>{exercise.duration} min</span><span>{exercise.sets} × {exercise.reps}</span></div><div className="library-actions"><button type="button" className="secondary-btn small" onClick={() => { setEditingId(exercise._id); setForm(exercise) }}>Edit</button><button type="button" className="danger-btn" onClick={() => handleDelete(exercise)}>Delete</button></div></article>)}</div> : <p className="empty-state">Create your first exercise to start building the library.</p>}
-      </section>
-    </div></main>
+    </main>
   )
 }
 
@@ -1556,53 +1834,62 @@ function PatientExercisesPage() {
     if (!latestProgressMap.has(key)) {
       latestProgressMap.set(key, p)
     }
+    if (!latestProgressMap.has(exId)) {
+      latestProgressMap.set(exId, p)
+    }
 
     if (p.completionStatus === 'Completed' && p.datePerformed) {
       const pTime = new Date(p.datePerformed).getTime()
       if (pTime >= todayStart && pTime < todayEnd) {
         todayCompletedSet.add(key)
-        todayCompletedSet.add(exId) // also match by exercise id
+        todayCompletedSet.add(exId)
       }
     }
   })
+
+  const daysElapsedSince = (startDate) => {
+    if (!startDate) return 0
+    const start = new Date(new Date(startDate).getFullYear(), new Date(startDate).getMonth(), new Date(startDate).getDate()).getTime()
+    return Math.max(0, Math.floor((todayStart - start) / 86400000))
+  }
+
+  const isItemScheduledToday = (item, planStartDate) => {
+    const freq = item.frequency || 'Daily'
+    if (freq === 'Daily') return true
+    const days = daysElapsedSince(planStartDate)
+    if (freq === 'Every2Days' || freq === 'EveryOtherDay') return days % 2 === 0
+    if (freq === 'Weekly') return days % 7 === 0
+    if (freq === 'Twice') return days % 3 === 0
+    return true
+  }
 
   // Flatten plans into exercise items
   const plans = Array.isArray(data?.plans) ? data.plans : []
   const allItems = plans.flatMap((plan) => {
     const planExercises = Array.isArray(plan.exercises) ? plan.exercises : []
-    return planExercises.map((item, index) => {
-      const ex = item.exercise || {}
-      const exId = String(ex._id || `ex-${index}`)
-      const planId = String(plan._id || '')
-      const key = `${exId}-${planId}`
-      const isCompletedToday = todayCompletedSet.has(key) || todayCompletedSet.has(exId)
-      const latestProg = latestProgressMap.get(key) || latestProgressMap.get(exId)
+    return planExercises
+      .filter((item) => item && item.exercise)
+      .map((item, index) => {
+        const ex = item.exercise || {}
+        const exId = String(ex._id || `ex-${index}`)
+        const planId = String(plan._id || '')
+        const key = `${exId}-${planId}`
+        const isCompletedToday = todayCompletedSet.has(key) || todayCompletedSet.has(exId)
+        const latestProg = latestProgressMap.get(key) || latestProgressMap.get(exId)
+        const isScheduledToday = isItemScheduledToday(item, plan.startDate)
 
-      // Frequency matching
-      const freq = item.frequency || 'Daily'
-      let isScheduledToday = true
-      const dayOfWeek = now.getDay()
-      if (freq === 'Every2Days' && plan.startDate) {
-        const diffDays = Math.floor((now.getTime() - new Date(plan.startDate).getTime()) / 86400000)
-        isScheduledToday = diffDays % 2 === 0
-      } else if (freq === 'Weekly') {
-        isScheduledToday = dayOfWeek === 1 // Monday
-      } else if (freq === 'Twice') {
-        isScheduledToday = dayOfWeek === 1 || dayOfWeek === 4 // Mon & Thu
-      }
-
-      return {
-        ...item,
-        exercise: ex,
-        planId: plan._id,
-        planName: plan.name || 'Rehabilitation Plan',
-        isCompletedToday,
-        isScheduledToday,
-        painLevel: isCompletedToday ? latestProg?.painLevel : undefined,
-        completedAt: isCompletedToday ? latestProg?.datePerformed : undefined,
-        notes: isCompletedToday ? latestProg?.notes : undefined,
-      }
-    })
+        return {
+          ...item,
+          exercise: ex,
+          planId: plan._id,
+          planName: plan.name || 'Rehabilitation Plan',
+          isCompletedToday,
+          isScheduledToday,
+          painLevel: isCompletedToday ? latestProg?.painLevel : undefined,
+          completedAt: isCompletedToday ? latestProg?.datePerformed : undefined,
+          notes: isCompletedToday ? latestProg?.notes : undefined,
+        }
+      })
   })
 
   // Extract distinct categories
@@ -1618,7 +1905,7 @@ function PatientExercisesPage() {
   const counts = {
     all: allItems.length,
     today: allItems.filter((i) => i.isScheduledToday).length,
-    completed: allItems.filter((i) => i.isCompletedToday).length,
+    completed: allItems.filter((i) => i.isScheduledToday && i.isCompletedToday).length,
     pending: allItems.filter((i) => i.isScheduledToday && !i.isCompletedToday).length,
   }
 
@@ -1626,9 +1913,10 @@ function PatientExercisesPage() {
   const filteredItems = allItems.filter((item) => {
     const ex = item.exercise || {}
     // Status filter
-    if (selectedStatus === 'today' && !item.isScheduledToday) return false
-    if (selectedStatus === 'completed' && !item.isCompletedToday) return false
-    if (selectedStatus === 'pending' && (!item.isScheduledToday || item.isCompletedToday)) return false
+    const effectiveStatus = (selectedStatus === 'today' && counts.today === 0 && counts.all > 0) ? 'all' : selectedStatus
+    if (effectiveStatus === 'today' && !item.isScheduledToday) return false
+    if (effectiveStatus === 'completed' && !item.isCompletedToday) return false
+    if (effectiveStatus === 'pending' && (!item.isScheduledToday || item.isCompletedToday)) return false
 
     // Category filter
     if (selectedCategory !== 'all' && ex.category !== selectedCategory) return false
@@ -1667,7 +1955,13 @@ function PatientExercisesPage() {
           </div>
           <div className="header-stats-pill">
             <span>Today&apos;s Progress:</span>
-            <strong>{counts.completed} / {counts.today} completed</strong>
+            <strong>
+              {counts.today > 0
+                ? `${counts.completed} / ${counts.today} completed`
+                : counts.all > 0
+                  ? `${counts.completed} completed today (${counts.all} assigned)`
+                  : '0 / 0 completed'}
+            </strong>
           </div>
         </div>
 
@@ -1710,7 +2004,11 @@ function PatientExercisesPage() {
           <div className="dashboard-panel filter-empty-panel">
             <span className="empty-icon" aria-hidden="true">🔍</span>
             <h3>No exercises match your filter</h3>
-            <p>Try clearing your search query or selecting &quot;All Assigned&quot; tab.</p>
+            <p>
+              {selectedStatus === 'today' && counts.today === 0
+                ? `You have ${counts.all} exercises assigned in your program, but none are scheduled for today.`
+                : 'Try clearing your search query or switching tabs.'}
+            </p>
             <button
               type="button"
               className="secondary-btn small"
@@ -1720,7 +2018,7 @@ function PatientExercisesPage() {
                 setSelectedStatus('all')
               }}
             >
-              Reset Filters
+              View All {allItems.length} Assigned Exercises
             </button>
           </div>
         ) : (
@@ -1736,7 +2034,7 @@ function PatientExercisesPage() {
           </div>
         )}
 
-        {/* Detail Modal */}
+        {/* Exercise Detail & Completion Modal */}
         {activeModalItem && (
           <ExerciseDetailModal
             item={activeModalItem}
@@ -2071,6 +2369,7 @@ function App() {
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/appointments" element={<PatientAppointmentsPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/patient-progress" element={<TherapistProgressPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/progress" element={<PatientProgressPage />} /></Route>
+            <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/pain-journal" element={<PainJournalPage apiRequest={apiRequest} />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/ai-assistant" element={<AssistantPage />} /></Route>
             <Route path="/monitoring" element={user?.role === 'Patient' ? <PatientMonitoringPage /> : <TherapistMonitoringPage />} />
             <Route path="/notifications" element={<NotificationsPage user={user} />} />

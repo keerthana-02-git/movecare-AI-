@@ -99,15 +99,13 @@ export const listAssignmentOptions = async (req, res) => {
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
 
     const [patients, exercises] = await Promise.all([
-      Patient.find({
-        $or: [
-          { assignedTherapist: therapist._id },
-          { _id: { $in: therapist.patientsAssigned || [] } },
-          { assignedTherapist: { $exists: false } },
-          { assignedTherapist: null },
-        ],
-      }).populate('user', 'name email').sort({ createdAt: -1 }).lean(),
-      Exercise.find({ createdBy: therapist._id }).sort({ name: 1 }).lean(),
+      Patient.find({})
+        .populate('user', 'name email')
+        .sort({ createdAt: -1 })
+        .lean(),
+      Exercise.find({})
+        .sort({ name: 1 })
+        .lean(),
     ]);
     res.json({ patients, exercises });
   } catch (error) {
@@ -125,30 +123,62 @@ export const assignExercise = async (req, res) => {
     const therapist = await getTherapist(req.user);
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
 
-    const [patient, exercise] = await Promise.all([
-      Patient.findById(patientId),
-      Exercise.findOne({ _id: exerciseId, createdBy: therapist._id }),
-    ]);
-    if (!patient || !exercise) return res.status(404).json({ message: 'Patient or exercise not found' });
+    // Look up patient by Patient._id or User._id
+    let patient = await Patient.findById(patientId);
+    if (!patient) {
+      patient = await Patient.findOne({ user: patientId });
+    }
 
+    // Look up exercise from library
+    const exercise = await Exercise.findById(exerciseId);
+    if (!patient || !exercise) {
+      return res.status(404).json({ message: 'Patient or exercise not found' });
+    }
+
+    // Associate patient with therapist if unassigned
     if (!patient.assignedTherapist || String(patient.assignedTherapist) !== String(therapist._id)) {
       patient.assignedTherapist = therapist._id;
       await patient.save();
+    }
+    if (!therapist.patientsAssigned) {
+      therapist.patientsAssigned = [];
     }
     if (!therapist.patientsAssigned.some((id) => String(id) === String(patient._id))) {
       therapist.patientsAssigned.push(patient._id);
       await therapist.save();
     }
 
-    const plan = await ExercisePlan.create({
+    // Check if an active plan with the same name already exists for this patient
+    let plan = await ExercisePlan.findOne({
       patient: patient._id,
-      therapist: therapist._id,
-      name: planName,
-      exercises: [{ exercise: exercise._id, frequency, order: 1 }],
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
-      status: 'Active',
+      name: planName.trim(),
+      status: { $in: ['Active', 'Paused'] },
     });
+
+    if (plan) {
+      const alreadyHasEx = plan.exercises.some((e) => String(e.exercise) === String(exercise._id));
+      if (!alreadyHasEx) {
+        plan.exercises.push({
+          exercise: exercise._id,
+          frequency,
+          order: plan.exercises.length + 1,
+        });
+        if (new Date(endDate) > new Date(plan.endDate)) {
+          plan.endDate = new Date(endDate);
+        }
+        await plan.save();
+      }
+    } else {
+      plan = await ExercisePlan.create({
+        patient: patient._id,
+        therapist: therapist._id,
+        name: planName.trim(),
+        exercises: [{ exercise: exercise._id, frequency, order: 1 }],
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        status: 'Active',
+      });
+    }
 
     await createNotification({
       recipient: patient.user,
@@ -158,7 +188,8 @@ export const assignExercise = async (req, res) => {
       relatedEntity: { entityType: 'ExercisePlan', entityId: plan._id },
     });
 
-    res.status(201).json(await plan.populate('exercises.exercise'));
+    const populatedPlan = await ExercisePlan.findById(plan._id).populate('exercises.exercise');
+    res.status(201).json(populatedPlan);
   } catch (error) {
     res.status(400).json({ message: error.message || 'Unable to assign exercise' });
   }
@@ -169,12 +200,91 @@ export const getPatientExercises = async (req, res) => {
     const patient = await ensurePatientProfile(req.user);
     if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
 
-    const plans = await ExercisePlan.find({ patient: patient._id, status: { $in: ['Active', 'Paused'] } })
+    const rawPlans = await ExercisePlan.find({
+      patient: patient._id,
+      status: { $in: ['Active', 'Paused'] },
+    })
       .sort({ startDate: -1 })
       .populate('exercises.exercise')
+      .populate({ path: 'therapist', populate: { path: 'user', select: 'name email' } })
       .lean();
-    const progress = await Progress.find({ patient: patient._id }).sort({ datePerformed: -1 }).limit(100).lean();
-    res.json({ plans, progress });
+
+    // Sanitize plans to filter out any deleted exercise references
+    const plans = rawPlans.map((plan) => ({
+      ...plan,
+      exercises: (plan.exercises || []).filter((item) => item && item.exercise),
+    }));
+
+    const progress = await Progress.find({ patient: patient._id })
+      .sort({ datePerformed: -1 })
+      .limit(100)
+      .lean();
+
+    // Compute Today's Stats
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfToday = new Date(startOfToday.getTime() + 86400000 - 1);
+
+    const todayCompletedProgress = progress.filter(
+      (p) =>
+        p.completionStatus === 'Completed' &&
+        p.datePerformed &&
+        new Date(p.datePerformed) >= startOfToday &&
+        new Date(p.datePerformed) <= endOfToday
+    );
+
+    const todayCompletedExerciseIds = new Set(
+      todayCompletedProgress.map((p) => String(p.exercise?._id || p.exercise))
+    );
+
+    const daysElapsedSince = (startDate) => {
+      const start = new Date(new Date(startDate).getFullYear(), new Date(startDate).getMonth(), new Date(startDate).getDate());
+      return Math.max(0, Math.floor((startOfToday.getTime() - start.getTime()) / 86400000));
+    };
+
+    const isScheduledToday = (item, planStartDate) => {
+      const frequency = item.frequency || 'Daily';
+      if (frequency === 'Daily') return true;
+      const days = daysElapsedSince(planStartDate);
+      if (frequency === 'Every2Days' || frequency === 'EveryOtherDay') return days % 2 === 0;
+      if (frequency === 'Weekly') return days % 7 === 0;
+      if (frequency === 'Twice') return days % 3 === 0;
+      return true;
+    };
+
+    let totalAssigned = 0;
+    let todayAssigned = 0;
+    let todayCompleted = 0;
+
+    plans.forEach((plan) => {
+      (plan.exercises || []).forEach((item) => {
+        if (item && item.exercise) {
+          totalAssigned++;
+          if (isScheduledToday(item, plan.startDate)) {
+            todayAssigned++;
+            const exIdStr = String(item.exercise._id || item.exercise);
+            if (todayCompletedExerciseIds.has(exIdStr)) {
+              todayCompleted++;
+            }
+          }
+        }
+      });
+    });
+
+    const todayRemaining = Math.max(0, todayAssigned - todayCompleted);
+    const completionRate = todayAssigned > 0 ? Math.round((todayCompleted / todayAssigned) * 100) : 0;
+
+    res.json({
+      plans,
+      progress,
+      stats: {
+        totalAssigned,
+        todayTotal: todayAssigned,
+        todayCompleted,
+        todayRemaining,
+        completionRate,
+      },
+    });
   } catch (error) {
     res.status(500).json({ message: 'Unable to load assigned exercises' });
   }

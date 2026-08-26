@@ -7,5 +7,17 @@ import Appointment from './Appointment.js';
 import Progress from './Progress.js';
 import Notification from './Notification.js';
 import MonitoringSession from './MonitoringSession.js';
+import PainJournal from './PainJournal.js';
 
-export { User, Patient, Therapist, Exercise, ExercisePlan, Appointment, Progress, Notification, MonitoringSession };
+export {
+  User,
+  Patient,
+  Therapist,
+  Exercise,
+  ExercisePlan,
+  Appointment,
+  Progress,
+  Notification,
+  MonitoringSession,
+  PainJournal,
+};
