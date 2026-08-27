@@ -8,6 +8,7 @@ const auditLogSchema = new mongoose.Schema(
       enum: [
         'USER_LOGIN',
         'USER_REGISTER',
+        'USER_PASSWORD_RESET',
         'USER_ROLE_UPDATED',
         'USER_STATUS_UPDATED',
         'THERAPIST_STATUS_UPDATED',
