@@ -8,6 +8,7 @@ import Progress from './Progress.js';
 import Notification from './Notification.js';
 import MonitoringSession from './MonitoringSession.js';
 import PainJournal from './PainJournal.js';
+import AiRecommendation from './AiRecommendation.js';
 
 export {
   User,
@@ -20,4 +21,5 @@ export {
   Notification,
   MonitoringSession,
   PainJournal,
+  AiRecommendation,
 };

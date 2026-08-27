@@ -1178,10 +1178,270 @@ function LoadingDashboard() {
 }
 
 function RecommendationPanel() {
+  const [tab, setTab] = useState('recommendations')
   const [data, setData] = useState(null)
+  const [adaptiveData, setAdaptiveData] = useState(null)
+  const [analysisData, setAnalysisData] = useState(null)
+  const [bodyPart, setBodyPart] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [reminderStatus, setReminderStatus] = useState('')
   const [error, setError] = useState('')
-  useEffect(() => { apiRequest('/ai/recommendations').then(setData).catch((loadError) => setError(loadError.message)) }, [])
-  return <section className="ai-recommendation-panel"><div className="ai-panel-heading"><div><span className="card-eyebrow">MoveCare AI feature</span><h3>Personalized exercise recommendations</h3><p>Suggestions are generated from your recorded condition, age, pain, mobility, and exercise history.</p></div><span className="ai-badge">AI guide</span></div>{error && <div className="ai-inline-error">{error}</div>}{!data && !error && <div className="ai-loading">Reviewing your care data...</div>}{data && <><div className="ai-inputs"><span>Condition: <strong>{data.inputProfile.condition}</strong></span><span>Age: <strong>{data.inputProfile.age}</strong></span><span>Pain: <strong>{data.inputProfile.painLevel === null ? 'Not recorded' : `${data.inputProfile.painLevel}/10`}</strong></span><span>Mobility: <strong>{data.inputProfile.mobilityLevel === null ? 'Not recorded' : `${data.inputProfile.mobilityLevel}/100`}</strong></span></div><div className="recommendation-list">{data.recommendations.length ? data.recommendations.map((item) => <article className="recommendation-item" key={item.exercise._id}><div><div className="recommendation-title"><strong>{item.exercise.name}</strong>{item.alreadyAssigned && <span className="assigned-tag">In your plan</span>}</div><p>{item.reason}</p></div><div className="recommendation-meta"><span>{item.suggestedDifficulty}</span><span>{item.suggestedDuration} min</span><span>{item.suggestedFrequency}</span></div></article>) : <p className="empty-state">Your exercise library does not have a matching suggestion yet.</p>}</div><p className="ai-disclaimer">{data.disclaimer}</p></>}</section>
+
+  const loadRecommendations = async (bp = '') => {
+    try {
+      setLoading(true)
+      const url = bp ? `/ai/recommendations?bodyPart=${encodeURIComponent(bp)}` : '/ai/recommendations'
+      const res = await apiRequest(url)
+      setData(res)
+      setError('')
+    } catch (loadError) {
+      setError(loadError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadAdaptive = async () => {
+    try {
+      setLoading(true)
+      const res = await apiRequest('/ai/adaptive-recommendations')
+      setAdaptiveData(res)
+      setError('')
+    } catch (loadError) {
+      setError(loadError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadAnalysis = async () => {
+    try {
+      setLoading(true)
+      const res = await apiRequest('/ai/progress-analysis')
+      setAnalysisData(res)
+      setError('')
+    } catch (loadError) {
+      setError(loadError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadRecommendations()
+  }, [])
+
+  const handleTabChange = (newTab) => {
+    setTab(newTab)
+    if (newTab === 'recommendations' && !data) loadRecommendations(bodyPart)
+    if (newTab === 'adaptive' && !adaptiveData) loadAdaptive()
+    if (newTab === 'analysis' && !analysisData) loadAnalysis()
+  }
+
+  const handleSmartReminders = async () => {
+    try {
+      setReminderStatus('Evaluating care schedule in MongoDB...')
+      const res = await apiRequest('/ai/smart-reminders', { method: 'POST' })
+      setReminderStatus(
+        res.notificationsCreatedCount > 0
+          ? `Dispatched ${res.notificationsCreatedCount} smart reminder notification(s) to your inbox!`
+          : `Evaluated schedule: ${res.remindersCount} item(s) checked. You are fully up to date!`
+      )
+      setTimeout(() => setReminderStatus(''), 6000)
+    } catch (reminderErr) {
+      setReminderStatus(`Reminder error: ${reminderErr.message}`)
+    }
+  }
+
+  return (
+    <section className="ai-recommendation-panel">
+      <div className="ai-panel-heading">
+        <div>
+          <span className="card-eyebrow">MoveCare AI Intelligence Suite</span>
+          <h3>Personalized Rehabilitation & Insights</h3>
+          <p>Real-time clinical suggestions generated from your condition, pain logs, mobility, and completion history.</p>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <button
+            type="button"
+            className="secondary-btn small"
+            onClick={handleSmartReminders}
+            title="Evaluate appointments, pending exercises, and missed sessions"
+          >
+            🔔 Run Smart Reminders
+          </button>
+          <span className="ai-badge">AI Suite</span>
+        </div>
+      </div>
+
+      {reminderStatus && (
+        <div className="success-message" role="status" style={{ marginBottom: '1rem' }}>
+          {reminderStatus}
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+        <button
+          type="button"
+          className={tab === 'recommendations' ? 'primary-btn small' : 'secondary-btn small'}
+          onClick={() => handleTabChange('recommendations')}
+        >
+          Exercise Recommendations
+        </button>
+        <button
+          type="button"
+          className={tab === 'adaptive' ? 'primary-btn small' : 'secondary-btn small'}
+          onClick={() => handleTabChange('adaptive')}
+        >
+          Adaptive Guidance
+        </button>
+        <button
+          type="button"
+          className={tab === 'analysis' ? 'primary-btn small' : 'secondary-btn small'}
+          onClick={() => handleTabChange('analysis')}
+        >
+          Progress Analyzer
+        </button>
+      </div>
+
+      {error && <div className="ai-inline-error">{error}</div>}
+      {loading && <div className="ai-loading">Evaluating clinical records from MongoDB...</div>}
+
+      {/* TAB 1: Recommendations */}
+      {tab === 'recommendations' && data && (
+        <>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', marginBottom: '1rem' }}>
+            <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>
+              Target Body Area:
+              <select
+                value={bodyPart}
+                onChange={(e) => {
+                  setBodyPart(e.target.value)
+                  loadRecommendations(e.target.value)
+                }}
+                style={{ marginLeft: '0.5rem', padding: '0.25rem 0.5rem', borderRadius: '0.375rem', border: '1px solid #cbd5e1' }}
+              >
+                <option value="">All Regions</option>
+                <option value="Knee">Knee</option>
+                <option value="Shoulder">Shoulder</option>
+                <option value="Back">Lower Back</option>
+                <option value="Neck">Cervical / Neck</option>
+                <option value="Hip">Hip</option>
+                <option value="Ankle">Ankle</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="ai-inputs">
+            <span>Condition: <strong>{data.inputProfile.condition}</strong></span>
+            <span>Age: <strong>{data.inputProfile.age}</strong></span>
+            <span>Pain: <strong>{data.inputProfile.painLevel === null ? 'Not recorded' : `${data.inputProfile.painLevel}/10`}</strong></span>
+            <span>Mobility: <strong>{data.inputProfile.mobilityLevel === null ? 'Not recorded' : `${data.inputProfile.mobilityLevel}/100`}</strong></span>
+          </div>
+
+          <div className="recommendation-list">
+            {data.recommendations.length ? (
+              data.recommendations.map((item) => (
+                <article className="recommendation-item" key={item.exercise?._id || item.name}>
+                  <div>
+                    <div className="recommendation-title">
+                      <strong>{item.name || item.exercise?.name}</strong>
+                      {item.alreadyAssigned && <span className="assigned-tag">In your plan</span>}
+                    </div>
+                    <p>{item.reason}</p>
+                  </div>
+                  <div className="recommendation-meta">
+                    <span>{item.suggestedDifficulty}</span>
+                    <span>{item.suggestedDuration} min</span>
+                    <span>{item.suggestedFrequency}</span>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <p className="empty-state">No matching exercise suggestions found for this body region.</p>
+            )}
+          </div>
+          <p className="ai-disclaimer">{data.disclaimer}</p>
+        </>
+      )}
+
+      {/* TAB 2: Adaptive Guidance */}
+      {tab === 'adaptive' && adaptiveData && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+            <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', color: '#0d8b85', fontWeight: 700 }}>
+              Protocol: {adaptiveData.adaptiveCategory}
+            </span>
+            <p style={{ margin: '0.5rem 0', lineHeight: 1.5, fontSize: '0.9rem' }}>
+              {adaptiveData.safetyNotice}
+            </p>
+            <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.82rem', color: '#475569' }}>
+              <span>Recent Pain: <strong>{adaptiveData.recentPain}/10</strong></span>
+              <span>Mobility Score: <strong>{adaptiveData.recentMobility}/100</strong></span>
+              <span>Target Duration: <strong>{adaptiveData.plan.duration} min</strong></span>
+              <span>Suggested Frequency: <strong>{adaptiveData.plan.frequency}</strong></span>
+            </div>
+          </div>
+
+          <div className="recommendation-list">
+            {adaptiveData.recommendations.map((item) => (
+              <article className="recommendation-item" key={item.exercise?._id || item.name}>
+                <div>
+                  <div className="recommendation-title">
+                    <strong>{item.name || item.exercise?.name}</strong>
+                    {item.alreadyAssigned && <span className="assigned-tag">Active Routine</span>}
+                  </div>
+                  <p>{item.reason}</p>
+                </div>
+                <div className="recommendation-meta">
+                  <span>{item.suggestedDifficulty}</span>
+                  <span>{item.suggestedDuration} min</span>
+                  <span>{item.suggestedFrequency}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+          <p className="ai-disclaimer">{adaptiveData.disclaimer}</p>
+        </div>
+      )}
+
+      {/* TAB 3: Progress Analysis */}
+      {tab === 'analysis' && analysisData && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.9rem' }}>
+          <div style={{ padding: '1rem', background: '#f0fdfa', borderRadius: '0.5rem', border: '1px solid #99f6e4' }}>
+            <strong style={{ color: '#0d8b85', display: 'block', marginBottom: '0.35rem' }}>Executive Summary</strong>
+            <p style={{ margin: 0, lineHeight: 1.5 }}>{analysisData.analysis.summary}</p>
+          </div>
+
+          <div style={{ padding: '1rem', background: '#fff', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+            <strong style={{ display: 'block', marginBottom: '0.35rem' }}>Adherence Observations</strong>
+            <p style={{ margin: 0, lineHeight: 1.5 }}>{analysisData.analysis.adherenceObservations}</p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+            <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+              <strong style={{ color: '#0284c7', display: 'block', marginBottom: '0.5rem' }}>Areas for Improvement</strong>
+              <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                {analysisData.analysis.improvementAreas.map((item, idx) => (
+                  <li key={idx} style={{ marginBottom: '0.25rem' }}>{item}</li>
+                ))}
+              </ul>
+            </div>
+            <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+              <strong style={{ color: '#059669', display: 'block', marginBottom: '0.5rem' }}>Suggested Next Steps</strong>
+              <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                {analysisData.analysis.suggestedNextSteps.map((item, idx) => (
+                  <li key={idx} style={{ marginBottom: '0.25rem' }}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <p className="ai-disclaimer">{analysisData.disclaimer}</p>
+        </div>
+      )}
+    </section>
+  )
 }
 
 function formatDate(value) {
@@ -2264,28 +2524,149 @@ function PatientProgressPage() {
 }
 
 function AssistantPage() {
-  const [messages, setMessages] = useState([{ role: 'assistant', text: 'I can help explain your MoveCare exercise suggestions, progress, and appointments.' }])
+  const [messages, setMessages] = useState([
+    {
+      role: 'assistant',
+      text: 'Hello! I am your MoveCare AI Recovery Guide. I can explain your assigned exercises, review your pain journal trends, check upcoming appointments, and share musculoskeletal wellness tips.',
+    },
+  ])
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const sendMessage = async (event) => {
-    event.preventDefault()
-    if (!message.trim()) return
-    const currentMessage = message.trim()
-    setMessages((current) => [...current, { role: 'user', text: currentMessage }]); setMessage(''); setLoading(true); setError('')
-    try { const response = await apiRequest('/ai/assistant', { method: 'POST', body: JSON.stringify({ message: currentMessage }) }); setMessages((current) => [...current, { role: 'assistant', text: response.answer }]) } catch (sendError) { setError(sendError.message) } finally { setLoading(false) }
+
+  const handleSend = async (customText) => {
+    const textToSend = (typeof customText === 'string' ? customText : message).trim()
+    if (!textToSend) return
+    setMessages((current) => [...current, { role: 'user', text: textToSend }])
+    setMessage('')
+    setLoading(true)
+    setError('')
+    try {
+      const response = await apiRequest('/ai/assistant', {
+        method: 'POST',
+        body: JSON.stringify({ message: textToSend }),
+      })
+      setMessages((current) => [...current, { role: 'assistant', text: response.answer }])
+    } catch (sendError) {
+      setError(sendError.message)
+    } finally {
+      setLoading(false)
+    }
   }
-  return <main className="page-shell assistant-page"><div className="container assistant-wrap"><div className="management-heading"><span className="eyebrow accent">MoveCare AI feature</span><h2>Recovery assistant</h2><p>A simple software guide for understanding your dashboard. It does not diagnose conditions or replace your care team.</p></div><section className="assistant-panel"><div className="assistant-messages">{messages.map((item, index) => <div className={`assistant-message ${item.role}`} key={`${item.role}-${index}`}><span>{item.role === 'assistant' ? 'AI guide' : 'You'}</span><p>{item.text}</p></div>)}</div>{error && <div className="form-error" role="alert">{error}</div>}<form className="assistant-form" onSubmit={sendMessage}><input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Ask about progress, exercises, or appointments" aria-label="Ask the recovery assistant" /><button className="primary-btn" disabled={loading}>{loading ? 'Thinking...' : 'Send'}</button></form><p className="ai-disclaimer">This assistant provides general software guidance only. Contact a licensed healthcare professional for medical questions or urgent concerns.</p></section></div></main>
+
+  const prompts = [
+    'What are my prescribed exercises for today?',
+    'How does my recent pain trend look?',
+    'When is my next upcoming appointment?',
+    'How is my recovery progress calculated?',
+    'What should I do if pain worsens during exercise?',
+  ]
+
+  return (
+    <main className="page-shell assistant-page">
+      <div className="container assistant-wrap">
+        <div className="management-heading">
+          <span className="eyebrow accent">MoveCare AI Feature</span>
+          <h2>Clinical Recovery Assistant</h2>
+          <p>
+            An interactive educational guide connected to your MoveCare care records. It provides safe, supportive guidance and does not provide clinical diagnoses.
+          </p>
+        </div>
+
+        <section className="assistant-panel">
+          <div style={{ marginBottom: '1rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {prompts.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                className="secondary-btn small"
+                style={{ fontSize: '0.78rem', borderRadius: '999px', padding: '0.35rem 0.75rem' }}
+                onClick={() => handleSend(prompt)}
+                disabled={loading}
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+
+          <div className="assistant-messages">
+            {messages.map((item, index) => (
+              <div className={`assistant-message ${item.role}`} key={`${item.role}-${index}`}>
+                <span>{item.role === 'assistant' ? 'MoveCare AI' : 'You'}</span>
+                <p>{item.text}</p>
+              </div>
+            ))}
+            {loading && (
+              <div className="assistant-message assistant">
+                <span>MoveCare AI</span>
+                <p>Analyzing care records...</p>
+              </div>
+            )}
+          </div>
+
+          {error && <div className="form-error" role="alert">{error}</div>}
+
+          <form
+            className="assistant-form"
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleSend()
+            }}
+          >
+            <input
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              placeholder="Ask about your routine, pain trend, exercises, or appointments..."
+              aria-label="Ask the recovery assistant"
+              disabled={loading}
+            />
+            <button className="primary-btn" disabled={loading || !message.trim()}>
+              {loading ? 'Thinking...' : 'Send'}
+            </button>
+          </form>
+
+          <p className="ai-disclaimer">
+            Non-Diagnostic Notice: This assistant is an educational software tool. It does not replace a licensed healthcare professional or provide medical diagnoses. For acute symptoms or injuries, contact your healthcare provider.
+          </p>
+        </section>
+      </div>
+    </main>
+  )
 }
+
 
 function TherapistProgressPage() {
   const [patients, setPatients] = useState(null)
   const [selectedId, setSelectedId] = useState('')
   const [detail, setDetail] = useState(null)
+  const [aiSummary, setAiSummary] = useState(null)
+  const [loadingSummary, setLoadingSummary] = useState(false)
   const [error, setError] = useState('')
   const [searchParams] = useSearchParams()
-  useEffect(() => { apiRequest('/progress/patients').then((data) => { setPatients(data); const requestedId = searchParams.get('patient'); setSelectedId(data.some((item) => item.patient._id === requestedId) ? requestedId : data[0]?.patient?._id || '') }).catch((loadError) => setError(loadError.message)) }, [searchParams])
-  useEffect(() => { if (selectedId) apiRequest(`/progress/patients/${selectedId}`).then(setDetail).catch((loadError) => setError(loadError.message)) }, [selectedId])
+
+  useEffect(() => {
+    apiRequest('/progress/patients')
+      .then((data) => {
+        setPatients(data)
+        const requestedId = searchParams.get('patient')
+        setSelectedId(data.some((item) => item.patient._id === requestedId) ? requestedId : data[0]?.patient?._id || '')
+      })
+      .catch((loadError) => setError(loadError.message))
+  }, [searchParams])
+
+  useEffect(() => {
+    if (selectedId) {
+      apiRequest(`/progress/patients/${selectedId}`)
+        .then(setDetail)
+        .catch((loadError) => setError(loadError.message))
+      setLoadingSummary(true)
+      apiRequest(`/ai/therapist/patients/${selectedId}/summary`)
+        .then((res) => setAiSummary(res.summary))
+        .catch(() => setAiSummary(null))
+        .finally(() => setLoadingSummary(false))
+    }
+  }, [selectedId])
+
   if (error && !patients) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
   return (
     <main className="page-shell">
@@ -2343,6 +2724,49 @@ function TherapistProgressPage() {
                   <ProgressChart data={detail.timeline.filter((item) => item.mobilityScore !== null)} dataKey="mobilityScore" color="#2b77d1" emptyLabel="No mobility data yet." />
                 </section>
               </div>
+
+              {/* Feature 5: Therapist AI Clinical Summary */}
+              <section className="management-panel" style={{ marginTop: '1.5rem', background: '#f0fdfa', border: '1px solid #99f6e4' }}>
+                <div className="panel-heading">
+                  <div>
+                    <span className="card-eyebrow" style={{ color: '#0d8b85' }}>MoveCare AI Assistant</span>
+                    <h3>Clinical Summary & Adherence Review</h3>
+                  </div>
+                </div>
+                {loadingSummary ? (
+                  <p style={{ fontSize: '0.85rem', color: '#64748b' }}>Synthesizing clinical signals from MongoDB...</p>
+                ) : aiSummary ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.88rem' }}>
+                    <p style={{ margin: 0, lineHeight: 1.5 }}>
+                      <strong>Clinical Overview: </strong>{aiSummary.clinicalNotes}
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
+                      <div style={{ padding: '0.75rem', background: '#fff', borderRadius: '0.5rem', border: '1px solid #ccfbf1' }}>
+                        <strong style={{ color: '#0d8b85', display: 'block', fontSize: '0.78rem', textTransform: 'uppercase' }}>Pain Trend</strong>
+                        <span>{aiSummary.painTrend}</span>
+                      </div>
+                      <div style={{ padding: '0.75rem', background: '#fff', borderRadius: '0.5rem', border: '1px solid #ccfbf1' }}>
+                        <strong style={{ color: '#0d8b85', display: 'block', fontSize: '0.78rem', textTransform: 'uppercase' }}>Recent Progress</strong>
+                        <span>{aiSummary.recentProgress}</span>
+                      </div>
+                      <div style={{ padding: '0.75rem', background: '#fff', borderRadius: '0.5rem', border: '1px solid #ccfbf1' }}>
+                        <strong style={{ color: '#0d8b85', display: 'block', fontSize: '0.78rem', textTransform: 'uppercase' }}>Upcoming Consultation</strong>
+                        <span>{aiSummary.upcomingAppointment}</span>
+                      </div>
+                    </div>
+                    {aiSummary.completedExercises?.length > 0 && (
+                      <div style={{ fontSize: '0.82rem', color: '#334155' }}>
+                        <strong>Completed Exercises: </strong>{aiSummary.completedExercises.join(', ')}
+                      </div>
+                    )}
+                    <small style={{ color: '#64748b', fontStyle: 'italic' }}>
+                      Assistive Clinician Summary · Aggregated from patient-reported entries and clinical logs.
+                    </small>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: '0.85rem', color: '#64748b' }}>AI clinical summary will update as patient records accrue.</p>
+                )}
+              </section>
 
               {/* Assigned Exercises & Plans */}
               <section className="management-panel" style={{ marginTop: '1.5rem' }}>
