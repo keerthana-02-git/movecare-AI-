@@ -23,6 +23,10 @@ export const protect = async (req, res, next) => {
       return res.status(401).json({ message: 'User not found' });
     }
 
+    if (req.user.isActive === false) {
+      return res.status(403).json({ message: 'Account is deactivated. Please contact an administrator.' });
+    }
+
     next();
   } catch (error) {
     return res.status(401).json({ message: 'Invalid or expired token' });

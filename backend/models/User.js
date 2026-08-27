@@ -42,6 +42,15 @@ const userSchema = new mongoose.Schema(
       enum: ['Patient', 'Therapist', 'Admin'],
       default: 'Patient',
     },
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
+    deactivatedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { Patient, Therapist, User } from '../models/index.js';
+import { logAuditEvent } from '../utils/auditLogger.js';
 
 const generateToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
@@ -77,6 +78,15 @@ export const registerUser = async (req, res) => {
       throw profileError;
     }
 
+    await logAuditEvent({
+      action: 'USER_REGISTER',
+      performedBy: user,
+      performedByRole: user.role,
+      targetEntity: { entityType: 'User', entityId: user._id },
+      details: { name: user.name, email: user.email, role: user.role },
+      req,
+    });
+
     res.status(201).json({
       message: 'User registered successfully',
       user: {
@@ -110,10 +120,23 @@ export const loginUser = async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
+    if (user.isActive === false) {
+      return res.status(403).json({ message: 'Account is deactivated. Please contact an administrator.' });
+    }
+
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
+
+    await logAuditEvent({
+      action: 'USER_LOGIN',
+      performedBy: user,
+      performedByRole: user.role,
+      targetEntity: { entityType: 'User', entityId: user._id },
+      details: { email: user.email, role: user.role },
+      req,
+    });
 
     res.json({
       message: 'Login successful',

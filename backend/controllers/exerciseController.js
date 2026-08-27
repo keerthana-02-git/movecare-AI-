@@ -8,6 +8,7 @@ import {
 import { ensureTherapistProfile } from './authController.js';
 import { ensurePatientProfile } from './patientController.js';
 import { createNotification } from './notificationController.js';
+import { logAuditEvent } from '../utils/auditLogger.js';
 
 const getTherapist = async (user) => {
   if (user?.role === 'Therapist') {
@@ -69,6 +70,16 @@ export const createExercise = async (req, res) => {
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
 
     const exercise = await Exercise.create({ ...pickExerciseFields(req.body), createdBy: therapist._id });
+
+    await logAuditEvent({
+      action: 'EXERCISE_CREATED',
+      performedBy: req.user,
+      performedByRole: req.user.role,
+      targetEntity: { entityType: 'Exercise', entityId: exercise._id },
+      details: { exerciseId: exercise._id, name: exercise.name, targetBodyPart: exercise.targetBodyPart },
+      req,
+    });
+
     res.status(201).json(exercise);
   } catch (error) {
     res.status(400).json({ message: error.message || 'Unable to create exercise' });
@@ -84,6 +95,16 @@ export const updateExercise = async (req, res) => {
       { new: true, runValidators: true },
     );
     if (!exercise) return res.status(404).json({ message: 'Exercise not found' });
+
+    await logAuditEvent({
+      action: 'EXERCISE_UPDATED',
+      performedBy: req.user,
+      performedByRole: req.user.role,
+      targetEntity: { entityType: 'Exercise', entityId: exercise._id },
+      details: { exerciseId: exercise._id, name: exercise.name },
+      req,
+    });
+
     res.json(exercise);
   } catch (error) {
     res.status(400).json({ message: error.message || 'Unable to update exercise' });
@@ -100,6 +121,16 @@ export const deleteExercise = async (req, res) => {
       { 'exercises.exercise': exercise._id },
       { $pull: { exercises: { exercise: exercise._id } } },
     );
+
+    await logAuditEvent({
+      action: 'EXERCISE_DELETED',
+      performedBy: req.user,
+      performedByRole: req.user.role,
+      targetEntity: { entityType: 'Exercise', entityId: exercise._id },
+      details: { exerciseId: exercise._id, name: exercise.name },
+      req,
+    });
+
     res.json({ message: 'Exercise deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Unable to delete exercise' });
@@ -243,6 +274,19 @@ export const assignExercise = async (req, res) => {
       title: 'New exercise plan assigned',
       message: `${exerciseNames} assigned to your ${planName} plan.`,
       relatedEntity: { entityType: 'ExercisePlan', entityId: plan._id },
+    });
+
+    await logAuditEvent({
+      action: 'EXERCISE_ASSIGNED',
+      performedBy: req.user,
+      performedByRole: req.user.role,
+      targetEntity: { entityType: 'ExercisePlan', entityId: plan._id },
+      details: {
+        patientId: patient._id,
+        planName: plan.name,
+        assignedExercisesCount: idsToAssign.length,
+      },
+      req,
     });
 
     const populatedPlan = await ExercisePlan.findById(plan._id).populate('exercises.exercise');

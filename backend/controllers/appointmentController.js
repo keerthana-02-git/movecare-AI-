@@ -3,6 +3,7 @@ import { Appointment, Patient, Therapist } from '../models/index.js';
 import { ensureTherapistProfile } from './authController.js';
 import { ensurePatientProfile } from './patientController.js';
 import { createNotification } from './notificationController.js';
+import { logAuditEvent } from '../utils/auditLogger.js';
 
 const slotMinutes = 45;
 
@@ -191,6 +192,21 @@ export const bookAppointment = async (req, res) => {
       });
     }
 
+    await logAuditEvent({
+      action: 'APPOINTMENT_BOOKED',
+      performedBy: req.user,
+      performedByRole: req.user.role,
+      targetEntity: { entityType: 'Appointment', entityId: appointment._id },
+      details: {
+        appointmentId: appointment._id,
+        therapistId: therapist._id,
+        appointmentDate: appointment.appointmentDate,
+        startTime,
+        endTime,
+      },
+      req,
+    });
+
     res.status(201).json(await appointment.populate([
       { path: 'therapist', populate: { path: 'user', select: 'name email' } },
     ]));
@@ -251,6 +267,19 @@ export const cancelPatientAppointment = async (req, res) => {
         relatedEntity: { entityType: 'Appointment', entityId: appointment._id },
       });
     }
+
+    await logAuditEvent({
+      action: 'APPOINTMENT_CANCELLED',
+      performedBy: req.user,
+      performedByRole: req.user.role,
+      targetEntity: { entityType: 'Appointment', entityId: appointment._id },
+      details: {
+        appointmentId: appointment._id,
+        cancelledBy: 'Patient',
+        reason: appointment.reasonForCancellation,
+      },
+      req,
+    });
     res.json(appointment);
   } catch (error) {
     res.status(400).json({ message: error.message || 'Unable to cancel appointment' });
@@ -348,6 +377,20 @@ export const updateTherapistAppointment = async (req, res) => {
       });
     }
 
+    await logAuditEvent({
+      action: 'APPOINTMENT_STATUS_UPDATED',
+      performedBy: req.user,
+      performedByRole: req.user.role,
+      targetEntity: { entityType: 'Appointment', entityId: appointment._id },
+      details: {
+        appointmentId: appointment._id,
+        status: appointment.status,
+        updatedBy: req.user.role,
+        notes: appointment.notes,
+      },
+      req,
+    });
+
     res.json(appointment);
   } catch (error) {
     res.status(400).json({ message: error.message || 'Unable to update appointment' });
@@ -441,6 +484,19 @@ export const updateConsultationStatus = async (req, res) => {
         populate: { path: 'user', select: 'name email' },
       },
     ]);
+
+    await logAuditEvent({
+      action: 'CONSULTATION_STATUS_UPDATED',
+      performedBy: req.user,
+      performedByRole: req.user.role,
+      targetEntity: { entityType: 'Consultation', entityId: appointment._id },
+      details: {
+        appointmentId: appointment._id,
+        consultationStatus: appointment.consultationStatus,
+        role: req.user.role,
+      },
+      req,
+    });
 
     res.json(appointment);
   } catch (error) {

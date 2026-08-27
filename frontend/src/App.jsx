@@ -1042,13 +1042,27 @@ function AdminDashboardPage({ user }) {
   const [notice, setNotice] = useState('')
 
   const load = async () => {
-    try { setData(await apiRequest('/admin/overview')); setError('') } catch (loadError) { setError(loadError.message) }
+    try {
+      setData(await apiRequest('/admin/overview'))
+      setError('')
+    } catch (loadError) {
+      setError(loadError.message)
+    }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+  }, [])
 
   const update = async (path, options, message) => {
-    try { await apiRequest(path, options); setNotice(message); await load() } catch (updateError) { setError(updateError.message) }
+    try {
+      await apiRequest(path, options)
+      setNotice(message)
+      setTimeout(() => setNotice(''), 5000)
+      await load()
+    } catch (updateError) {
+      setError(updateError.message)
+    }
   }
 
   const removeExercise = async (exercise) => {
@@ -1056,24 +1070,392 @@ function AdminDashboardPage({ user }) {
     await update(`/admin/exercises/${exercise._id}`, { method: 'DELETE' }, 'Exercise deleted.')
   }
 
-  if (error && !data) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert"><strong>We could not load the admin dashboard.</strong><p>{error}. Please try again shortly.</p></div></div></main>
+  const toggleUserStatus = async (targetUser) => {
+    const nextState = targetUser.isActive === false
+    const actionName = nextState ? 'reactivate' : 'deactivate'
+    if (!window.confirm(`Are you sure you want to ${actionName} account for ${targetUser.name}?`)) return
+    await update(
+      `/admin/users/${targetUser._id}/status`,
+      { method: 'PATCH', body: JSON.stringify({ isActive: nextState }) },
+      `User ${nextState ? 'reactivated' : 'deactivated'} successfully.`
+    )
+  }
+
+  if (error && !data) {
+    return (
+      <main className="page-shell">
+        <div className="container dashboard-wrap">
+          <div className="dashboard-error" role="alert">
+            <strong>We could not load the admin dashboard.</strong>
+            <p>{error}. Please try again shortly.</p>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
   if (!data) return <LoadingDashboard />
 
   const tabs = [
-    ['users', 'Users'], ['patients', 'Patients'], ['therapists', 'Therapists'], ['exercises', 'Exercises'], ['appointments', 'Appointments'],
+    ['users', 'Users'],
+    ['patients', 'Patients'],
+    ['therapists', 'Therapists'],
+    ['exercises', 'Exercises'],
+    ['appointments', 'Appointments'],
+    ['activity', 'Audit & System Activity'],
   ]
-  return <main className="page-shell admin-page"><div className="container management-wrap">
-    <div className="dashboard-hero"><div><span className="eyebrow accent">Administration</span><h2>Good to see you, {user.name.split(' ')[0]}.</h2><p>Manage access, care operations, and platform activity from one workspace.</p></div><div className="dashboard-avatar" aria-hidden="true">{user.name.charAt(0)}</div></div>
-    {error && <div className="form-error" role="alert">{error}</div>}{notice && <div className="success-message" role="status">{notice}</div>}
-    <div className="admin-stat-grid"><ProgressMetric label="Total users" value={data.stats.users} /><ProgressMetric label="Patients" value={data.stats.patients} /><ProgressMetric label="Therapists" value={data.stats.therapists} /><ProgressMetric label="Available therapists" value={data.stats.availableTherapists} /><ProgressMetric label="Active plans" value={data.stats.activePlans} /><ProgressMetric label="Appointments" value={data.stats.appointments} /></div>
-    <section className="management-panel admin-workspace"><div className="admin-tabs" role="tablist" aria-label="Administration sections">{tabs.map(([key, label]) => <button type="button" role="tab" aria-selected={view === key} className={view === key ? 'admin-tab active' : 'admin-tab'} key={key} onClick={() => setView(key)}>{label}<span>{key === 'users' ? data.users.length : key === 'patients' ? (data.patients || []).length : key === 'therapists' ? data.therapists.length : key === 'exercises' ? data.exercises.length : data.appointments.length}</span></button>)}</div>
-      {view === 'users' && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>User</th><th>Role</th><th>Joined</th><th>Manage</th></tr></thead><tbody>{data.users.map((item) => <tr key={item._id}><td><strong>{item.name}</strong><small>{item.email}</small></td><td><span className="role-tag">{item.role}</span></td><td>{formatDate(item.createdAt)}</td><td><select value={item.role} onChange={(event) => update(`/admin/users/${item._id}/role`, { method: 'PATCH', body: JSON.stringify({ role: event.target.value }) }, 'User role updated.')}><option>Patient</option><option>Therapist</option><option>Admin</option></select></td></tr>)}</tbody></table></div>}
-      {view === 'patients' && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Patient</th><th>Condition & Injury</th><th>Therapist</th><th>Joined</th><th>Status</th></tr></thead><tbody>{(data.patients || []).map((item) => <tr key={item._id}><td><strong>{item.user?.name || 'Patient'}</strong><small>{item.user?.email}</small></td><td><strong>{item.medicalCondition}</strong><small>{item.injuryDescription || 'No notes'}</small></td><td>{item.assignedTherapist?.user?.name || <span className="empty-dash">Unassigned</span>}</td><td>{formatDate(item.createdAt)}</td><td><span className="role-tag">{item.status || 'Active'}</span></td></tr>)}</tbody></table>{!(data.patients || []).length && <p className="empty-state">No patient records found.</p>}</div>}
-      {view === 'therapists' && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Therapist</th><th>Specialization</th><th>Patients</th><th>Status</th></tr></thead><tbody>{data.therapists.map((item) => <tr key={item._id}><td><strong>{item.user?.name}</strong><small>{item.user?.email} · {item.licenseNumber}</small></td><td>{item.specialization}</td><td>{item.patientsAssigned?.length || 0}</td><td><select value={item.status} onChange={(event) => update(`/admin/therapists/${item._id}/status`, { method: 'PATCH', body: JSON.stringify({ status: event.target.value }) }, 'Therapist status updated.')}><option>Available</option><option>Unavailable</option><option>OnLeave</option></select></td></tr>)}</tbody></table></div>}
-      {view === 'exercises' && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Exercise</th><th>Category</th><th>Difficulty</th><th>Created by</th><th>Manage</th></tr></thead><tbody>{data.exercises.map((item) => <tr key={item._id}><td><strong>{item.name}</strong><small>{item.targetBodyPart} · {item.duration} min</small></td><td>{item.category}</td><td>{item.difficulty}</td><td>{item.createdBy?.user?.name || 'Unknown'}</td><td><button type="button" className="danger-btn" onClick={() => removeExercise(item)}>Delete</button></td></tr>)}</tbody></table></div>}
-      {view === 'appointments' && <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Date</th><th>Patient</th><th>Therapist</th><th>Type</th><th>Status</th></tr></thead><tbody>{data.appointments.map((item) => <tr key={item._id}><td><strong>{formatDate(item.appointmentDate)}</strong><small>{item.startTime} - {item.endTime}</small></td><td>{item.patient?.user?.name || 'Unknown'}</td><td>{item.therapist?.user?.name || 'Unknown'}</td><td>{item.type}</td><td><AppointmentStatus status={item.status} /></td></tr>)}</tbody></table>{!data.appointments.length && <p className="empty-state">No appointments recorded yet.</p>}</div>}
-    </section>
-  </div></main>
+
+  const formatDateTime = (val) => {
+    if (!val) return '—'
+    const d = new Date(val)
+    return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+  }
+
+  return (
+    <main className="page-shell admin-page">
+      <div className="container management-wrap">
+        <div className="dashboard-hero">
+          <div>
+            <span className="eyebrow accent">Administration</span>
+            <h2>Good to see you, {user.name.split(' ')[0]}.</h2>
+            <p>Manage access, healthcare operations, user lifecycle, and live platform audit logs from MongoDB.</p>
+          </div>
+          <div className="dashboard-avatar" aria-hidden="true">
+            {user.name.charAt(0)}
+          </div>
+        </div>
+
+        {error && <div className="form-error" role="alert">{error}</div>}
+        {notice && <div className="success-message" role="status">{notice}</div>}
+
+        <div className="admin-stat-grid">
+          <ProgressMetric label="Total users" value={data.stats.users} />
+          <ProgressMetric label="Active users" value={data.stats.activeUsers ?? data.stats.users} />
+          <ProgressMetric label="Patients" value={data.stats.patients} />
+          <ProgressMetric label="Therapists" value={data.stats.therapists} />
+          <ProgressMetric label="Available therapists" value={data.stats.availableTherapists} />
+          <ProgressMetric label="Active plans" value={data.stats.activePlans} />
+          <ProgressMetric label="Appointments" value={data.stats.appointments} />
+          <ProgressMetric label="Completed sessions" value={data.stats.completedSessions ?? 0} />
+        </div>
+
+        <section className="management-panel admin-workspace">
+          <div className="admin-tabs" role="tablist" aria-label="Administration sections">
+            {tabs.map(([key, label]) => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === key}
+                className={view === key ? 'admin-tab active' : 'admin-tab'}
+                key={key}
+                onClick={() => setView(key)}
+              >
+                {label}
+                <span>
+                  {key === 'users'
+                    ? data.users.length
+                    : key === 'patients'
+                    ? (data.patients || []).length
+                    : key === 'therapists'
+                    ? data.therapists.length
+                    : key === 'exercises'
+                    ? data.exercises.length
+                    : key === 'appointments'
+                    ? data.appointments.length
+                    : (data.recentActivity || []).length}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* USERS TAB */}
+          {view === 'users' && (
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Joined</th>
+                    <th>Change Role</th>
+                    <th>Lifecycle Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.users.map((item) => {
+                    const isSelf = String(item._id) === String(user.id || user._id)
+                    const isDeactivated = item.isActive === false
+                    return (
+                      <tr key={item._id}>
+                        <td>
+                          <strong>{item.name}</strong>
+                          <small>{item.email}</small>
+                        </td>
+                        <td>
+                          <span className="role-tag">{item.role}</span>
+                        </td>
+                        <td>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '0.2rem 0.5rem',
+                              borderRadius: '999px',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              background: isDeactivated ? '#fee2e2' : '#dcfce7',
+                              color: isDeactivated ? '#991b1b' : '#166534',
+                            }}
+                          >
+                            {isDeactivated ? 'Deactivated' : 'Active'}
+                          </span>
+                        </td>
+                        <td>{formatDate(item.createdAt)}</td>
+                        <td>
+                          <select
+                            value={item.role}
+                            disabled={isSelf}
+                            onChange={(event) =>
+                              update(
+                                `/admin/users/${item._id}/role`,
+                                { method: 'PATCH', body: JSON.stringify({ role: event.target.value }) },
+                                'User role updated.'
+                              )
+                            }
+                          >
+                            <option>Patient</option>
+                            <option>Therapist</option>
+                            <option>Admin</option>
+                          </select>
+                        </td>
+                        <td>
+                          {isSelf ? (
+                            <small style={{ color: '#64748b', fontStyle: 'italic' }}>Current session</small>
+                          ) : (
+                            <button
+                              type="button"
+                              className={isDeactivated ? 'secondary-btn small' : 'danger-btn small'}
+                              style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem' }}
+                              onClick={() => toggleUserStatus(item)}
+                            >
+                              {isDeactivated ? 'Reactivate' : 'Deactivate'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* PATIENTS TAB */}
+          {view === 'patients' && (
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Patient</th>
+                    <th>Condition & Injury</th>
+                    <th>Therapist</th>
+                    <th>Joined</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.patients || []).map((item) => (
+                    <tr key={item._id}>
+                      <td>
+                        <strong>{item.user?.name || 'Patient'}</strong>
+                        <small>{item.user?.email}</small>
+                      </td>
+                      <td>
+                        <strong>{item.medicalCondition}</strong>
+                        <small>{item.injuryDescription || 'No notes'}</small>
+                      </td>
+                      <td>{item.assignedTherapist?.user?.name || <span className="empty-dash">Unassigned</span>}</td>
+                      <td>{formatDate(item.createdAt)}</td>
+                      <td>
+                        <span className="role-tag">{item.user?.isActive === false ? 'Deactivated' : item.status || 'Active'}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!(data.patients || []).length && <p className="empty-state">No patient records found.</p>}
+            </div>
+          )}
+
+          {/* THERAPISTS TAB */}
+          {view === 'therapists' && (
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Therapist</th>
+                    <th>Specialization</th>
+                    <th>Patients</th>
+                    <th>Availability</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.therapists.map((item) => (
+                    <tr key={item._id}>
+                      <td>
+                        <strong>{item.user?.name}</strong>
+                        <small>{item.user?.email} · {item.licenseNumber}</small>
+                      </td>
+                      <td>{item.specialization}</td>
+                      <td>{item.patientsAssigned?.length || 0}</td>
+                      <td>
+                        <select
+                          value={item.status}
+                          onChange={(event) =>
+                            update(
+                              `/admin/therapists/${item._id}/status`,
+                              { method: 'PATCH', body: JSON.stringify({ status: event.target.value }) },
+                              'Therapist status updated.'
+                            )
+                          }
+                        >
+                          <option>Available</option>
+                          <option>Unavailable</option>
+                          <option>OnLeave</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* EXERCISES TAB */}
+          {view === 'exercises' && (
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Exercise</th>
+                    <th>Category</th>
+                    <th>Difficulty</th>
+                    <th>Created by</th>
+                    <th>Manage</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.exercises.map((item) => (
+                    <tr key={item._id}>
+                      <td>
+                        <strong>{item.name}</strong>
+                        <small>{item.targetBodyPart} · {item.duration} min</small>
+                      </td>
+                      <td>{item.category}</td>
+                      <td>{item.difficulty}</td>
+                      <td>{item.createdBy?.user?.name || 'MoveCare Clinician'}</td>
+                      <td>
+                        <button type="button" className="danger-btn" onClick={() => removeExercise(item)}>
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* APPOINTMENTS TAB */}
+          {view === 'appointments' && (
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Patient</th>
+                    <th>Therapist</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.appointments.map((item) => (
+                    <tr key={item._id}>
+                      <td>
+                        <strong>{formatDate(item.appointmentDate)}</strong>
+                        <small>{item.startTime} - {item.endTime}</small>
+                      </td>
+                      <td>{item.patient?.user?.name || 'Unknown'}</td>
+                      <td>{item.therapist?.user?.name || 'Unknown'}</td>
+                      <td>{item.type}</td>
+                      <td>
+                        <AppointmentStatus status={item.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!data.appointments.length && <p className="empty-state">No appointments recorded yet.</p>}
+            </div>
+          )}
+
+          {/* AUDIT & ACTIVITY TAB */}
+          {view === 'activity' && (
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Action</th>
+                    <th>Actor</th>
+                    <th>Role</th>
+                    <th>Target</th>
+                    <th>Details</th>
+                    <th>Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.recentActivity || []).map((log) => (
+                    <tr key={log._id}>
+                      <td>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            padding: '0.2rem 0.5rem',
+                            borderRadius: '0.375rem',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            fontFamily: 'monospace',
+                            background: '#f1f5f9',
+                            color: '#0f172a',
+                          }}
+                        >
+                          {log.action}
+                        </span>
+                      </td>
+                      <td>
+                        <strong>{log.performedBy?.name || 'System / Guest'}</strong>
+                        <small>{log.performedBy?.email || log.ipAddress || '—'}</small>
+                      </td>
+                      <td>
+                        <span className="role-tag">{log.performedByRole || 'System'}</span>
+                      </td>
+                      <td>{log.targetEntity?.entityType || '—'}</td>
+                      <td style={{ maxWidth: '280px', fontSize: '0.8rem', color: '#475569' }}>
+                        {typeof log.details === 'object' ? JSON.stringify(log.details) : String(log.details || '—')}
+                      </td>
+                      <td>{formatDateTime(log.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!(data.recentActivity || []).length && <p className="empty-state">No audit activity recorded yet.</p>}
+            </div>
+          )}
+        </section>
+      </div>
+    </main>
+  )
 }
 
 function TherapistDashboardPage({ user }) {

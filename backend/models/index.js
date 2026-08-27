@@ -9,6 +9,7 @@ import Notification from './Notification.js';
 import MonitoringSession from './MonitoringSession.js';
 import PainJournal from './PainJournal.js';
 import AiRecommendation from './AiRecommendation.js';
+import AuditLog from './AuditLog.js';
 
 export {
   User,
@@ -22,4 +23,5 @@ export {
   MonitoringSession,
   PainJournal,
   AiRecommendation,
+  AuditLog,
 };
