@@ -1,5 +1,6 @@
 import express from 'express';
 import {
+  adoptStarterPlan,
   assignExercise,
   completePatientExercise,
   createExercise,
@@ -16,6 +17,7 @@ const router = express.Router();
 
 router.use(protect);
 router.get('/patient/assigned', authorize('Patient'), getPatientExercises);
+router.post('/patient/starter-plan', authorize('Patient'), adoptStarterPlan);
 router.post('/patient/:exerciseId/complete', authorize('Patient'), completePatientExercise);
 router.get('/', authorize('Therapist'), listExercises);
 router.get('/assignment-options', authorize('Therapist'), listAssignmentOptions);

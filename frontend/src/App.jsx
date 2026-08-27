@@ -9,9 +9,9 @@ import {
   useSearchParams,
   useParams,
   useNavigate,
+  useLocation,
 } from 'react-router-dom'
 import './App.css'
-import ProfileSummary from './components/dashboard/ProfileSummary'
 import RecoveryOverview from './components/dashboard/RecoveryOverview'
 import RecoveryGoal from './components/dashboard/RecoveryGoal'
 import TodaysExercises from './components/dashboard/TodaysExercises'
@@ -106,6 +106,30 @@ const steps = [
 
 function Navbar({ user, onLogout }) {
   const navigate = useNavigate()
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    if (!user) {
+      setUnreadCount(0)
+      return
+    }
+    let isMounted = true
+    const fetchUnread = () => {
+      apiRequest('/notifications/unread-count')
+        .then((res) => {
+          if (isMounted && typeof res?.unreadCount === 'number') {
+            setUnreadCount(res.unreadCount)
+          }
+        })
+        .catch(() => {})
+    }
+    fetchUnread()
+    const interval = setInterval(fetchUnread, 20000)
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+    }
+  }, [user])
 
   const handleLogout = async () => {
     const token = localStorage.getItem('movecare-token')
@@ -164,7 +188,10 @@ function Navbar({ user, onLogout }) {
               {user.role === 'Patient' && <NavLink to="/ai-assistant" className="secondary-btn small">AI guide</NavLink>}
               {user.role === 'Therapist' && <NavLink to="/monitoring" className="secondary-btn small">Live monitor</NavLink>}
               {user.role === 'Patient' && <NavLink to="/monitoring" className="secondary-btn small">Live monitor</NavLink>}
-              <NavLink to="/notifications" className="secondary-btn small">Notifications</NavLink>
+              <NavLink to="/notifications" className="secondary-btn small nav-notif-btn" title="View notifications and care reminders">
+                🔔 <span className="nav-notif-text">Inbox</span>
+                {unreadCount > 0 && <span className="nav-notif-badge">{unreadCount}</span>}
+              </NavLink>
               <button type="button" className="primary-btn small" onClick={handleLogout}>
                 Logout
               </button>
@@ -215,28 +242,75 @@ function ServiceCard({ title }) {
 }
 
 function Footer() {
+  const location = useLocation()
+  if (location.pathname === '/login' || location.pathname === '/register') {
+    return null
+  }
+
   return (
-    <footer className="site-footer">
-      <div className="container footer-wrap">
-        <div>
-          <h3>MoveCare AI</h3>
-          <p>Enhancing musculoskeletal health through accessible remote physical therapy and care.</p>
+    <footer className="site-footer" aria-label="MoveCare AI Footer">
+      <div className="footer-container">
+        {/* Top Section: Properly Aligned Footer Links Grid */}
+        <div className="footer-links-grid">
+          {/* Column 1: Brand & Clinical Mission */}
+          <div className="footer-col brand-col">
+            <div className="footer-brand-header">
+              <span className="footer-brand-icon" aria-hidden="true">🩺</span>
+              <h3 className="footer-brand-title">MoveCare AI</h3>
+            </div>
+            <p className="footer-mission-text">
+              Intelligent musculoskeletal rehabilitation and remote physical therapy platform with real-time clinical telemetry.
+            </p>
+            <div className="footer-compliance-chip">
+              🛡️ HIPAA-Compliant · Clinical Telehealth
+            </div>
+          </div>
+
+          {/* Column 2: Patient Care */}
+          <div className="footer-col">
+            <h4 className="footer-col-title">Patient Care</h4>
+            <ul className="footer-nav-list">
+              <li><NavLink to="/dashboard">Recovery Cockpit</NavLink></li>
+              <li><NavLink to="/my-exercises">Daily Prescribed Routine</NavLink></li>
+              <li><NavLink to="/pain-journal">Pain & Mobility Journal</NavLink></li>
+              <li><NavLink to="/appointments">Telehealth Consultations</NavLink></li>
+            </ul>
+          </div>
+
+          {/* Column 3: Clinical Intelligence */}
+          <div className="footer-col">
+            <h4 className="footer-col-title">AI & Intelligence</h4>
+            <ul className="footer-nav-list">
+              <li><NavLink to="/ai-assistant">AI Clinical Assistant</NavLink></li>
+              <li><NavLink to="/monitoring">Session Telemetry Monitor</NavLink></li>
+              <li><NavLink to="/notifications">Clinical Alert Center</NavLink></li>
+              <li><NavLink to="/dashboard">Therapy Milestones</NavLink></li>
+            </ul>
+          </div>
+
+          {/* Column 4: Contact & Clinical Support */}
+          <div className="footer-col">
+            <h4 className="footer-col-title">Care Team & Support</h4>
+            <ul className="footer-contact-list">
+              <li><span>✉️ support@movecare.ai</span></li>
+              <li><span>📱 +1 (555) 487-2040</span></li>
+              <li><span>🕒 24/7 Digital Health Telemetry</span></li>
+              <li><small style={{ color: '#64748b', fontSize: '0.74rem', marginTop: '0.25rem' }}>For urgent emergencies, dial 911 immediately.</small></li>
+            </ul>
+          </div>
         </div>
-        <div>
-          <h4>Quick links</h4>
-          <ul>
-            <li><NavLink to="/about">About</NavLink></li>
-            <li><NavLink to="/features">Features</NavLink></li>
-            <li><NavLink to="/services">Services</NavLink></li>
-          </ul>
-        </div>
-        <div>
-          <h4>Contact</h4>
-          <ul>
-            <li>hello@movecare.ai</li>
-            <li>+1 (555) 487-2040</li>
-            <li>Remote care support</li>
-          </ul>
+
+        {/* Bottom Section: MoveCare AI Single-Line Signature */}
+        <div className="footer-bottom-divider" />
+        <div className="footer-single-line-bar">
+          <div className="footer-single-line-content">
+            <span className="footer-glow-dot" aria-hidden="true" />
+            <strong className="footer-single-line-brand">MoveCare AI</strong>
+            <span className="footer-bullet">•</span>
+            <span className="footer-single-line-desc">Next-Generation Intelligent Rehabilitation & Physical Therapy</span>
+            <span className="footer-bullet">•</span>
+            <span className="footer-single-line-copy">© {new Date().getFullYear()} All Rights Reserved</span>
+          </div>
         </div>
       </div>
     </footer>
@@ -775,12 +849,18 @@ function AuthPage({ mode, onAuthComplete }) {
   }
 
   return (
-    <main className="page-shell">
+    <main className="page-shell auth-page-pastel-bg">
       <div className="container auth-wrap">
-        <form className="auth-card" onSubmit={handleSubmit}>
-          <div className="auth-header">
-            <span className="eyebrow accent">MoveCare AI</span>
+        <form className="auth-card auth-card-3d" onSubmit={handleSubmit}>
+          <div className="auth-3d-header">
+            <div className="auth-3d-badge-orb" aria-hidden="true">
+              🩺
+            </div>
+            <span className="eyebrow accent" style={{ letterSpacing: '0.08em', fontWeight: 700 }}>MoveCare AI</span>
             <h2>{isRegister ? 'Create your account' : 'Welcome back'}</h2>
+            <p className="auth-3d-subtitle">
+              {isRegister ? 'Personalized Clinical Rehabilitation Platform' : 'Sign in to access your prescribed physical therapy'}
+            </p>
           </div>
 
           {isRegister && (
@@ -836,7 +916,7 @@ function AuthPage({ mode, onAuthComplete }) {
 
           {error && <div className="form-error" role="alert">{error}</div>}
 
-          <button type="submit" className="primary-btn auth-button" disabled={loading}>
+          <button type="submit" className="primary-btn auth-button auth-button-3d" disabled={loading}>
             {loading ? 'Please wait...' : isRegister ? 'Create account' : 'Login'}
           </button>
 
@@ -965,27 +1045,349 @@ function NotificationPreview() {
 }
 
 function notificationIcon(type) {
-  return ({ Appointment: 'AP', ExerciseReminder: 'EX', ProgressUpdate: 'PR', Message: 'MS', NewExercisePlan: 'PL' }[type] || 'IN')
+  const icons = {
+    Appointment: '📅',
+    ExerciseReminder: '🏃',
+    MissedActivity: '⚠️',
+    AIAlert: '🤖',
+    ProgressUpdate: '📈',
+    NewExercisePlan: '📋',
+    Message: '💬',
+    SystemAlert: '🔔',
+  }
+  return icons[type] || '📩'
 }
 
 function NotificationsPage({ user }) {
   const [data, setData] = useState(null)
+  const [activeFilter, setActiveFilter] = useState('All')
   const [options, setOptions] = useState([])
   const [title, setTitle] = useState('')
   const [message, setMessage] = useState('')
   const [notificationType, setNotificationType] = useState('Message')
   const [patientId, setPatientId] = useState('')
   const [sending, setSending] = useState(false)
+  const [runningAutomation, setRunningAutomation] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
-  const load = async () => { try { const result = await apiRequest('/notifications?limit=50'); setData(result); setError('') } catch (loadError) { setError(loadError.message) } }
-  useEffect(() => { load(); if (user.role === 'Therapist') apiRequest('/exercises/assignment-options').then((result) => setOptions(result.patients)).catch(() => {}) }, [user.role])
-  const markRead = async (id) => { try { await apiRequest(`/notifications/${id}/read`, { method: 'PATCH' }); await load() } catch (readError) { setError(readError.message) } }
-  const markAllRead = async () => { try { await apiRequest('/notifications/read-all', { method: 'PATCH' }); await load() } catch (readError) { setError(readError.message) } }
-  const sendMessage = async (event) => { event.preventDefault(); try { setSending(true); await apiRequest('/notifications/messages', { method: 'POST', body: JSON.stringify({ patientId, title, message, type: notificationType }) }); setTitle(''); setMessage(''); setPatientId(''); setNotificationType('Message'); setNotice(notificationType === 'ExerciseReminder' ? 'Exercise reminder sent.' : 'Message sent.'); } catch (sendError) { setError(sendError.message) } finally { setSending(false) } }
-  if (error && !data) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
+
+  const load = async () => {
+    try {
+      const result = await apiRequest('/notifications?limit=60')
+      setData(result)
+      setError('')
+    } catch (loadError) {
+      setError(loadError.message)
+    }
+  }
+
+  useEffect(() => {
+    load()
+    if (user.role === 'Therapist') {
+      apiRequest('/exercises/assignment-options')
+        .then((result) => setOptions(result.patients || []))
+        .catch(() => {})
+    }
+  }, [user.role])
+
+  const markRead = async (id) => {
+    try {
+      setData((prev) => {
+        if (!prev) return prev
+        const updatedList = prev.notifications.map((n) => (n._id === id ? { ...n, isRead: true } : n))
+        const unread = updatedList.filter((n) => !n.isRead).length
+        return { ...prev, notifications: updatedList, unreadCount: unread }
+      })
+      await apiRequest(`/notifications/${id}/read`, { method: 'PATCH' })
+    } catch (readError) {
+      setError(readError.message)
+      await load()
+    }
+  }
+
+  const markAllRead = async () => {
+    try {
+      setData((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          notifications: prev.notifications.map((n) => ({ ...n, isRead: true })),
+          unreadCount: 0,
+        }
+      })
+      await apiRequest('/notifications/read-all', { method: 'PATCH' })
+      setNotice('All notifications marked as read.')
+      setTimeout(() => setNotice(''), 4000)
+    } catch (readError) {
+      setError(readError.message)
+      await load()
+    }
+  }
+
+  const deleteNotif = async (id) => {
+    try {
+      setData((prev) => {
+        if (!prev) return prev
+        const filtered = prev.notifications.filter((n) => n._id !== id)
+        const unread = filtered.filter((n) => !n.isRead).length
+        return { ...prev, notifications: filtered, unreadCount: unread }
+      })
+      await apiRequest(`/notifications/${id}`, { method: 'DELETE' })
+    } catch (delError) {
+      setError(delError.message)
+      await load()
+    }
+  }
+
+  const triggerAutomationJob = async () => {
+    try {
+      setRunningAutomation(true)
+      const res = await apiRequest('/notifications/automation/run', { method: 'POST' })
+      setNotice(`Automation completed: ${res.result?.totalCreated ?? 0} new alert(s) generated.`)
+      setTimeout(() => setNotice(''), 5000)
+      await load()
+    } catch (autoError) {
+      setError(autoError.message)
+    } finally {
+      setRunningAutomation(false)
+    }
+  }
+
+  const sendMessage = async (event) => {
+    event.preventDefault()
+    try {
+      setSending(true)
+      await apiRequest('/notifications/messages', {
+        method: 'POST',
+        body: JSON.stringify({ patientId, title, message, type: notificationType }),
+      })
+      setTitle('')
+      setMessage('')
+      setPatientId('')
+      setNotificationType('Message')
+      setNotice(notificationType === 'ExerciseReminder' ? 'Exercise reminder sent to patient.' : 'Care team message sent.')
+      setTimeout(() => setNotice(''), 4000)
+    } catch (sendError) {
+      setError(sendError.message)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  if (error && !data) {
+    return (
+      <main className="page-shell">
+        <div className="container dashboard-wrap">
+          <div className="dashboard-error" role="alert">{error}</div>
+        </div>
+      </main>
+    )
+  }
+
   if (!data) return <LoadingDashboard />
-  return <main className="page-shell notifications-page"><div className="container management-wrap"><div className="management-heading"><span className="eyebrow accent">MoveCare inbox</span><h2>Notifications</h2><p>Keep track of exercise reminders, appointments, progress updates, and care-team messages.</p></div>{error && <div className="form-error" role="alert">{error}</div>}{notice && <div className="success-message" role="status">{notice}</div>}<div className="notifications-layout"><section className="management-panel"><div className="panel-heading"><div><span className="card-eyebrow">Your updates</span><h3>{data.unreadCount} unread</h3></div>{data.unreadCount > 0 && <button className="secondary-btn small" type="button" onClick={markAllRead}>Mark all read</button>}</div>{data.notifications.length ? <div className="inbox-list">{data.notifications.map((notification) => <article className={`inbox-item ${notification.isRead ? '' : 'unread'}`} key={notification._id}><div className="notification-icon">{notificationIcon(notification.type)}</div><div className="inbox-content"><div className="inbox-title"><strong>{notification.title}</strong><span>{notification.priority}</span></div><p>{notification.message}</p><small>{formatDate(notification.createdAt)} · {notification.type}</small></div>{!notification.isRead && <button type="button" className="read-btn" onClick={() => markRead(notification._id)}>Mark read</button>}</article>)}</div> : <p className="empty-state">No notifications yet.</p>}</section>{user.role === 'Therapist' && <section className="management-panel message-panel"><span className="card-eyebrow">Care team</span><h3>Send a patient update</h3><p>Send a simple update or exercise reminder that will appear in the patient&apos;s inbox.</p><form className="message-form" onSubmit={sendMessage}><label>Patient<select value={patientId} onChange={(event) => setPatientId(event.target.value)} required><option value="">Select patient</option>{options.map((patient) => <option value={patient._id} key={patient._id}>{patient.user?.name}</option>)}</select></label><label>Type<select value={notificationType} onChange={(event) => setNotificationType(event.target.value)}><option value="Message">Therapist message</option><option value="ExerciseReminder">Exercise reminder</option></select></label><label>Title<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Progress check-in" required /></label><label>Message<textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Write a short care update" required /></label><button className="primary-btn" disabled={sending}>{sending ? 'Sending...' : 'Send update'}</button></form></section>}</div></div></main>
+
+  const allNotifications = data.notifications || []
+  const filteredNotifications = allNotifications.filter((n) => {
+    if (activeFilter === 'All') return true
+    if (activeFilter === 'Unread') return !n.isRead
+    if (activeFilter === 'Appointments') return n.type === 'Appointment'
+    if (activeFilter === 'Exercises') return n.type === 'ExerciseReminder' || n.type === 'NewExercisePlan'
+    if (activeFilter === 'Missed') return n.type === 'MissedActivity'
+    if (activeFilter === 'AI Alerts') return n.type === 'AIAlert' || n.type === 'ProgressUpdate'
+    if (activeFilter === 'Messages') return n.type === 'Message'
+    return true
+  })
+
+  const filterTabs = [
+    { label: 'All', count: allNotifications.length },
+    { label: 'Unread', count: data.unreadCount },
+    { label: 'Appointments', count: allNotifications.filter((n) => n.type === 'Appointment').length },
+    { label: 'Exercises', count: allNotifications.filter((n) => n.type === 'ExerciseReminder' || n.type === 'NewExercisePlan').length },
+    { label: 'Missed', count: allNotifications.filter((n) => n.type === 'MissedActivity').length },
+    { label: 'AI Alerts', count: allNotifications.filter((n) => n.type === 'AIAlert' || n.type === 'ProgressUpdate').length },
+    { label: 'Messages', count: allNotifications.filter((n) => n.type === 'Message').length },
+  ]
+
+  return (
+    <main className="page-shell notifications-page">
+      <div className="container management-wrap">
+        <div className="management-heading">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <span className="eyebrow accent">MoveCare Inbox</span>
+              <h2>Clinical Notifications & Alerts</h2>
+              <p>Real-time exercise reminders, appointment schedules, clinical progress updates, and AI recovery guidance.</p>
+            </div>
+            {(user.role === 'Admin' || user.role === 'Therapist') && (
+              <button
+                type="button"
+                className="secondary-btn small"
+                onClick={triggerAutomationJob}
+                disabled={runningAutomation}
+                title="Run background scheduler checks immediately"
+              >
+                {runningAutomation ? 'Running automation...' : '⚡ Run Automation Checks'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {error && <div className="form-error" role="alert">{error}</div>}
+        {notice && <div className="success-message" role="status">{notice}</div>}
+
+        {/* Filter Navigation Tabs */}
+        <div className="notif-filter-tabs" role="tablist" aria-label="Notification categories">
+          {filterTabs.map((tab) => (
+            <button
+              key={tab.label}
+              type="button"
+              className={`notif-tab-btn ${activeFilter === tab.label ? 'active' : ''}`}
+              onClick={() => setActiveFilter(tab.label)}
+              role="tab"
+              aria-selected={activeFilter === tab.label}
+            >
+              <span>{tab.label}</span>
+              <span className="tab-pill">{tab.count}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="notifications-layout">
+          <section className="management-panel notif-main-panel">
+            <div className="panel-heading">
+              <div>
+                <span className="card-eyebrow">Updates Feed</span>
+                <h3>{data.unreadCount > 0 ? `${data.unreadCount} unread notification${data.unreadCount === 1 ? '' : 's'}` : 'All caught up'}</h3>
+              </div>
+              {data.unreadCount > 0 && (
+                <button className="secondary-btn small" type="button" onClick={markAllRead}>
+                  ✓ Mark all as read
+                </button>
+              )}
+            </div>
+
+            {filteredNotifications.length ? (
+              <div className="inbox-list">
+                {filteredNotifications.map((notification) => (
+                  <article
+                    className={`inbox-item ${notification.isRead ? 'read' : 'unread'} priority-${notification.priority ? notification.priority.toLowerCase() : 'normal'}`}
+                    key={notification._id}
+                  >
+                    <div className="notification-icon" aria-hidden="true">
+                      {notificationIcon(notification.type)}
+                    </div>
+                    <div className="inbox-content">
+                      <div className="inbox-title">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <strong>{notification.title}</strong>
+                          <span className={`priority-tag ${notification.priority ? notification.priority.toLowerCase() : 'normal'}`}>
+                            {notification.priority || 'Normal'}
+                          </span>
+                          {!notification.isRead && <span className="unread-pulse-dot" title="Unread" />}
+                        </div>
+                        <div className="notif-actions-row">
+                          {!notification.isRead && (
+                            <button
+                              type="button"
+                              className="read-btn"
+                              onClick={() => markRead(notification._id)}
+                              title="Mark as read"
+                            >
+                              Mark read
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="notif-delete-btn"
+                            onClick={() => deleteNotif(notification._id)}
+                            title="Dismiss notification"
+                            aria-label="Dismiss notification"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                      <p className="inbox-message">{notification.message}</p>
+                      <small className="inbox-timestamp">
+                        {formatDate(notification.createdAt)} · <span className="notif-type-tag">{notification.type}</span>
+                      </small>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state notif-empty-state">
+                <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '0.5rem' }}>📭</span>
+                <h4>No notifications found</h4>
+                <p>
+                  {activeFilter === 'Unread'
+                    ? 'Great job! You have read all your notifications.'
+                    : `There are no ${activeFilter !== 'All' ? activeFilter.toLowerCase() : ''} updates in your inbox right now.`}
+                </p>
+              </div>
+            )}
+          </section>
+
+          {user.role === 'Therapist' && (
+            <section className="management-panel message-panel">
+              <span className="card-eyebrow">Clinical Communication</span>
+              <h3>Send Patient Update</h3>
+              <p>Dispatch an exercise reminder or care message directly to your assigned patient&apos;s MoveCare inbox.</p>
+              <form className="message-form" onSubmit={sendMessage}>
+                <label>
+                  Patient
+                  <select
+                    value={patientId}
+                    onChange={(event) => setPatientId(event.target.value)}
+                    required
+                  >
+                    <option value="">Select patient</option>
+                    {options.map((patient) => (
+                      <option value={patient._id} key={patient._id}>
+                        {patient.user?.name || 'Patient'} ({patient.medicalCondition || 'Active'})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Notification Type
+                  <select
+                    value={notificationType}
+                    onChange={(event) => setNotificationType(event.target.value)}
+                  >
+                    <option value="Message">Therapist message</option>
+                    <option value="ExerciseReminder">Exercise reminder</option>
+                  </select>
+                </label>
+                <label>
+                  Title
+                  <input
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    placeholder="e.g. Movement check-in"
+                    required
+                  />
+                </label>
+                <label>
+                  Message
+                  <textarea
+                    value={message}
+                    onChange={(event) => setMessage(event.target.value)}
+                    placeholder="Write a clear clinical note or encouragement..."
+                    rows={4}
+                    required
+                  />
+                </label>
+                <button className="primary-btn" disabled={sending}>
+                  {sending ? 'Sending...' : 'Send update →'}
+                </button>
+              </form>
+            </section>
+          )}
+        </div>
+      </div>
+    </main>
+  )
 }
 
 function DashboardPage({ user }) {
@@ -1723,26 +2125,32 @@ function RecommendationPanel() {
           </div>
 
           <div className="recommendation-list">
-            {data.recommendations.length ? (
-              data.recommendations.map((item) => (
-                <article className="recommendation-item" key={item.exercise?._id || item.name}>
-                  <div>
-                    <div className="recommendation-title">
-                      <strong>{item.name || item.exercise?.name}</strong>
-                      {item.alreadyAssigned && <span className="assigned-tag">In your plan</span>}
+            {(() => {
+              const uniqueList = data.recommendations.filter(
+                (item, idx, self) =>
+                  idx === self.findIndex((t) => (t.exercise?._id || t.name) === (item.exercise?._id || item.name))
+              )
+              return uniqueList.length ? (
+                uniqueList.map((item) => (
+                  <article className="recommendation-item" key={item.exercise?._id || item.name}>
+                    <div>
+                      <div className="recommendation-title">
+                        <strong>{item.name || item.exercise?.name}</strong>
+                        {item.alreadyAssigned && <span className="assigned-tag">In your plan</span>}
+                      </div>
+                      <p>{item.reason}</p>
                     </div>
-                    <p>{item.reason}</p>
-                  </div>
-                  <div className="recommendation-meta">
-                    <span>{item.suggestedDifficulty}</span>
-                    <span>{item.suggestedDuration} min</span>
-                    <span>{item.suggestedFrequency}</span>
-                  </div>
-                </article>
-              ))
-            ) : (
-              <p className="empty-state">No matching exercise suggestions found for this body region.</p>
-            )}
+                    <div className="recommendation-meta">
+                      <span>{item.suggestedDifficulty}</span>
+                      <span>{item.suggestedDuration} min</span>
+                      <span>{item.suggestedFrequency}</span>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="empty-state">No matching exercise suggestions found for this body region.</p>
+              )
+            })()}
           </div>
           <p className="ai-disclaimer">{data.disclaimer}</p>
         </>
@@ -1827,7 +2235,25 @@ function RecommendationPanel() {
 }
 
 function formatDate(value) {
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value))
+  if (!value) return 'Not provided'
+  try {
+    const d = new Date(value)
+    if (isNaN(d.getTime()) || d.getFullYear() <= 1970) return 'Not provided'
+    return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d)
+  } catch {
+    return 'Not provided'
+  }
+}
+
+function toInputDate(value) {
+  if (!value) return ''
+  try {
+    const d = new Date(value)
+    if (isNaN(d.getTime()) || d.getFullYear() <= 1970) return ''
+    return d.toISOString().split('T')[0]
+  } catch {
+    return ''
+  }
 }
 
 function PatientDashboardPage({ user }) {
@@ -1840,6 +2266,24 @@ function PatientDashboardPage({ user }) {
   const [journalModalEntry, setJournalModalEntry] = useState(null)
   const [journalSubmitting, setJournalSubmitting] = useState(false)
   const [journalError, setJournalError] = useState('')
+
+  // Starter routine state
+  const [activatingStarter, setActivatingStarter] = useState(false)
+  const [starterNotice, setStarterNotice] = useState('')
+
+  // Profile Dossier & Edit Modal State
+  const [viewProfileOpen, setViewProfileOpen] = useState(false)
+  const [editProfileOpen, setEditProfileOpen] = useState(false)
+  const [profileFormData, setProfileFormData] = useState({
+    name: '',
+    medicalCondition: '',
+    injuryDescription: '',
+    dateOfBirth: '',
+    gender: 'Other',
+    phoneNumber: '',
+  })
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [profileError, setProfileError] = useState('')
 
   const handleOpenJournalModal = (entry) => {
     setJournalModalEntry(entry || dashboard?.painJournal?.todayEntry || null)
@@ -1944,9 +2388,14 @@ function PatientDashboardPage({ user }) {
   }
 
   const recoveryGoal = dashboard?.recoveryGoal || (dashboard?.plans?.[0]?.goals || dashboard?.patient?.medicalCondition ? {
-    goal: dashboard.plans?.[0]?.goals || `Recovery for ${dashboard.patient?.medicalCondition}`,
+    goal: dashboard.plans?.[0]?.goals || `Target functional recovery & mobility restoration for ${dashboard.patient?.medicalCondition || 'active condition'}`,
     condition: dashboard?.patient?.medicalCondition !== 'Profile setup required' ? dashboard.patient.medicalCondition : null,
+    targetBodyPart: dashboard.plans?.[0]?.targetBodyPart || (dashboard?.patient?.medicalCondition && dashboard.patient.medicalCondition !== 'Profile setup required' ? dashboard.patient.medicalCondition : 'Rehabilitation Focus'),
+    planName: dashboard.plans?.[0]?.title || 'Active Rehabilitation Plan',
+    planStartDate: dashboard.plans?.[0]?.startDate || null,
+    planEndDate: dashboard.plans?.[0]?.endDate || null,
     targetDate: dashboard.plans?.[0]?.endDate || null,
+    notes: dashboard.plans?.[0]?.notes || null,
     plansCount: Array.isArray(dashboard?.plans) ? dashboard.plans.length : 0,
   } : null)
 
@@ -1975,106 +2424,608 @@ function PatientDashboardPage({ user }) {
   const notifications = Array.isArray(dashboard?.notifications) ? dashboard.notifications : []
   const patientFirstName = (profile?.name || user?.name || 'Patient').split(' ')[0]
 
+  const handleActivateStarterOnDashboard = async () => {
+    try {
+      setActivatingStarter(true)
+      setStarterNotice('')
+      await apiRequest('/exercises/patient/starter-plan', { method: 'POST' })
+      setStarterNotice('✨ Your personalized clinical rehabilitation routine is now active!')
+      setTimeout(() => setStarterNotice(''), 6000)
+      await loadDashboard()
+    } catch (err) {
+      setStarterNotice(err.message || 'Unable to activate starter routine.')
+    } finally {
+      setActivatingStarter(false)
+    }
+  }
+
+  // Profile Modal Handlers
+  const handleOpenEditProfile = () => {
+    setProfileFormData({
+      name: profile?.name || user?.name || '',
+      medicalCondition: profile?.medicalCondition === 'Profile setup required' ? '' : (profile?.medicalCondition || ''),
+      injuryDescription: profile?.injuryDescription || '',
+      dateOfBirth: toInputDate(profile?.dateOfBirth),
+      gender: profile?.gender || 'Other',
+      phoneNumber: profile?.phoneNumber || '',
+    })
+    setProfileError('')
+    setViewProfileOpen(false)
+    setEditProfileOpen(true)
+  }
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault()
+    try {
+      setProfileSaving(true)
+      setProfileError('')
+      const token = localStorage.getItem('movecare-token')
+      const response = await fetch(`${API_BASE_URL}/patients/me/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(profileFormData),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message || 'Failed to update profile.')
+      setEditProfileOpen(false)
+      await loadDashboard()
+    } catch (err) {
+      setProfileError(err.message || 'Unable to update profile.')
+    } finally {
+      setProfileSaving(false)
+    }
+  }
+
+  // Dynamic time greeting
+  const getGreeting = () => {
+    const hour = new Date().getHours()
+    if (hour < 12) return 'Good Morning'
+    if (hour < 17) return 'Good Afternoon'
+    return 'Good Evening'
+  }
+
+  // Today's formatted date
+  const todayDateString = new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date())
+
+  // Vitality Ribbon Calculations
+  const todayDone = exercises.todayCompleted || 0
+  const todayTotal = exercises.todayTotal || 0
+  const workoutStatus = todayTotal === 0 ? 'No Plan' : todayDone >= todayTotal ? 'Completed' : `${todayTotal - todayDone} Pending`
+  const workoutStatusClass = todayTotal === 0 ? 'info' : todayDone >= todayTotal ? 'good' : 'moderate'
+
+  const rawPain = dashboard?.painJournal?.todayEntry?.painLevel ?? (progressSummary.averagePain != null ? Math.round(progressSummary.averagePain) : null)
+  const painStatus = rawPain === null ? 'Check-in Needed' : rawPain <= 2 ? 'Minimal / None' : rawPain <= 5 ? 'Manageable' : 'Elevated'
+  const painStatusClass = rawPain === null ? 'info' : rawPain <= 2 ? 'good' : rawPain <= 5 ? 'moderate' : 'alert'
+
+  const rawMobility = progressSummary.averageMobility ?? (dashboard?.painJournal?.todayEntry?.mobilityScore ?? null)
+  const mobilityStatus = rawMobility === null ? 'Awaiting Check-in' : rawMobility >= 75 ? 'Optimal Range' : rawMobility >= 50 ? 'Steady Progress' : 'Limited Motion'
+  const mobilityStatusClass = rawMobility === null ? 'info' : rawMobility >= 75 ? 'good' : rawMobility >= 50 ? 'moderate' : 'alert'
+
+  const streakDays = recovery.currentStreak || 0
+  const streakStatus = streakDays > 0 ? `${streakDays} Days Consistent` : 'Start Your Streak'
+
   return (
     <main className="page-shell dashboard-page patient-dashboard-page">
-      <div className="container dashboard-wrap patient-dashboard-wrap">
-        {/* Patient Dashboard Hero */}
-        <div className="dashboard-hero patient-hero">
-          <div className="hero-text-content">
-            <span className="eyebrow accent">Patient Recovery Workspace</span>
-            <h2>Good to see you, {patientFirstName}.</h2>
-            <p>Here is your dynamic rehabilitation snapshot, today&apos;s routine, and progress signals.</p>
+      <div className="patient-dashboard-wrap-v2">
+        {/* Top Section: Patient Identity & Profile Header Banner */}
+        <section className="hero-banner-v2 patient-profile-top-banner">
+          <div className="hero-main-v2">
+            <div className="hero-badge-row">
+              <span className="hero-date-chip">📅 {todayDateString}</span>
+              <span className="hero-condition-chip">
+                🎯 {profile.medicalCondition && profile.medicalCondition !== 'Profile setup required' ? profile.medicalCondition : 'Functional Physical Rehabilitation'}
+              </span>
+              <span className={`vitality-status-pill ${profile.profileCompleted ? 'good' : 'moderate'}`} style={{ fontSize: '0.76rem' }}>
+                {profile.profileCompleted ? '● Verified Patient' : '● Profile Active'}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', margin: '0.8rem 0 0.5rem', flexWrap: 'wrap' }}>
+              <div className="patient-profile-avatar-glow" aria-hidden="true">
+                {(profile?.name || user?.name || 'P').charAt(0).toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: '240px' }}>
+                <h2 className="patient-profile-title">
+                  {getGreeting()}, {patientFirstName}.
+                </h2>
+                <div className="patient-profile-meta-pills">
+                  <span className="patient-meta-pill">✉️ {profile?.email || user?.email}</span>
+                  {profile.phoneNumber && <span className="patient-meta-pill">📱 {profile.phoneNumber}</span>}
+                  {profile.assignedTherapist?.name && (
+                    <span className="patient-meta-pill">
+                      👨‍⚕️ Clinician: <strong>{profile.assignedTherapist.name}</strong>
+                    </span>
+                  )}
+                  <span className="patient-meta-pill">
+                    🛡️ Care Status: <strong style={{ color: '#0d9488' }}>{profile.status}</strong>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {starterNotice && (
+              <div className="success-message" role="status" style={{ marginTop: '0.85rem' }}>
+                {starterNotice}
+              </div>
+            )}
           </div>
-          <div className="hero-action-group">
+
+          <div className="hero-actions-v2" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <button
+              type="button"
+              className="btn-profile-primary"
+              onClick={() => setViewProfileOpen(true)}
+            >
+              👤 View Full Profile
+            </button>
+            <button
+              type="button"
+              className="btn-profile-secondary"
+              onClick={handleOpenEditProfile}
+            >
+              ✏️ Edit Profile
+            </button>
             <button
               type="button"
               className="refresh-dashboard-btn"
               onClick={loadDashboard}
               disabled={loading}
-              title="Refresh dashboard data"
+              title="Refresh dashboard data from MongoDB"
             >
               {loading ? 'Refreshing...' : '🔄 Refresh Data'}
             </button>
-            <div className="dashboard-avatar patient-avatar" aria-hidden="true">
-              {(profile?.name || user?.name || 'P').charAt(0).toUpperCase()}
+          </div>
+        </section>
+
+        {/* 4-Tile Live Vitality Ribbon */}
+        <div className="vitality-ribbon-grid" aria-label="Daily Vitality & Clinical Telemetry">
+          {/* Tile 1: Workout Progress */}
+          <div className="vitality-tile workout">
+            <div className="vitality-header">
+              <span className="vitality-label">Today&apos;s Workout</span>
+              <span className="vitality-icon" aria-hidden="true">🏋️</span>
             </div>
+            <div className="vitality-value-row">
+              <span className="vitality-big-number">{todayDone}</span>
+              <span className="vitality-unit">/ {todayTotal} done</span>
+            </div>
+            <span className={`vitality-status-pill ${workoutStatusClass}`}>
+              {workoutStatus}
+            </span>
+          </div>
+
+          {/* Tile 2: Pain Level */}
+          <div className="vitality-tile pain">
+            <div className="vitality-header">
+              <span className="vitality-label">Comfort / Pain</span>
+              <span className="vitality-icon" aria-hidden="true">🩺</span>
+            </div>
+            <div className="vitality-value-row">
+              <span className="vitality-big-number">{rawPain != null ? rawPain : '—'}</span>
+              <span className="vitality-unit">{rawPain != null ? '/ 10' : 'not logged'}</span>
+            </div>
+            <span className={`vitality-status-pill ${painStatusClass}`}>
+              {painStatus}
+            </span>
+          </div>
+
+          {/* Tile 3: Mobility Index */}
+          <div className="vitality-tile mobility">
+            <div className="vitality-header">
+              <span className="vitality-label">Mobility Index</span>
+              <span className="vitality-icon" aria-hidden="true">⚡</span>
+            </div>
+            <div className="vitality-value-row">
+              <span className="vitality-big-number">{rawMobility != null ? rawMobility : '—'}</span>
+              <span className="vitality-unit">{rawMobility != null ? '/ 100' : 'pending check'}</span>
+            </div>
+            <span className={`vitality-status-pill ${mobilityStatusClass}`}>
+              {mobilityStatus}
+            </span>
+          </div>
+
+          {/* Tile 4: Recovery Streak */}
+          <div className="vitality-tile streak">
+            <div className="vitality-header">
+              <span className="vitality-label">Recovery Streak</span>
+              <span className="vitality-icon" aria-hidden="true">🔥</span>
+            </div>
+            <div className="vitality-value-row">
+              <span className="vitality-big-number">{streakDays}</span>
+              <span className="vitality-unit">days</span>
+            </div>
+            <span className="vitality-status-pill good">
+              {streakStatus}
+            </span>
           </div>
         </div>
 
-        {/* Quick Actions Bar */}
-        <nav className="patient-quick-actions" aria-label="Dashboard quick navigation">
-          <NavLink to="/my-exercises" className="quick-action-item">
-            <span className="action-icon" aria-hidden="true">🏋️</span>
-            <div>
+        {/* Quick Navigation Pills */}
+        <nav className="quick-nav-pills-v2" aria-label="Quick Clinical Navigation">
+          <NavLink to="/my-exercises" className="quick-nav-pill">
+            <div className="pill-icon-wrap" aria-hidden="true">🏋️</div>
+            <div className="pill-text">
               <strong>Daily Exercises</strong>
-              <small>{exercises.todayRemaining > 0 ? `${exercises.todayRemaining} pending today` : 'View routine'}</small>
+              <small>{exercises.todayRemaining > 0 ? `${exercises.todayRemaining} due today` : 'Review routine'}</small>
             </div>
           </NavLink>
-          <NavLink to="/pain-journal" className="quick-action-item">
-            <span className="action-icon" aria-hidden="true">📖</span>
-            <div>
-              <strong>Pain Journal</strong>
-              <small>{dashboard?.painJournal?.hasTodayEntry ? `Pain: ${dashboard.painJournal.todayEntry.painLevel}/10` : 'Daily check-in'}</small>
+
+          <NavLink to="/pain-journal" className="quick-nav-pill">
+            <div className="pill-icon-wrap" aria-hidden="true">📖</div>
+            <div className="pill-text">
+              <strong>Pain & Mobility</strong>
+              <small>{dashboard?.painJournal?.hasTodayEntry ? `Logged: ${dashboard.painJournal.todayEntry.painLevel}/10` : 'Daily check-in'}</small>
             </div>
           </NavLink>
-          <NavLink to="/appointments" className="quick-action-item">
-            <span className="action-icon" aria-hidden="true">📅</span>
-            <div>
-              <strong>Consultations</strong>
-              <small>{appointment ? '1 scheduled' : 'Book visit'}</small>
+
+          <NavLink to="/appointments" className="quick-nav-pill">
+            <div className="pill-icon-wrap" aria-hidden="true">📅</div>
+            <div className="pill-text">
+              <strong>Telehealth Visits</strong>
+              <small>{appointment ? 'Session booked' : 'Schedule visit'}</small>
             </div>
           </NavLink>
-          <NavLink to="/ai-assistant" className="quick-action-item">
-            <span className="action-icon" aria-hidden="true">🤖</span>
-            <div>
-              <strong>AI Recovery Guide</strong>
-              <small>Ask questions</small>
+
+          <NavLink to="/ai-assistant" className="quick-nav-pill">
+            <div className="pill-icon-wrap" aria-hidden="true">🤖</div>
+            <div className="pill-text">
+              <strong>AI Recovery Suite</strong>
+              <small>Clinical guidance</small>
             </div>
           </NavLink>
         </nav>
 
-        {/* Dynamic Multi-Component Dashboard Grid */}
-        <div className="patient-dashboard-grid">
-          {/* 1. Recovery Overview */}
-          <RecoveryOverview recovery={recovery} />
+        {/* Cockpit Asymmetric 2-Column Grid */}
+        <div className="cockpit-grid">
+          {/* Main Column (65%): Rehabilitation & Clinical Engine */}
+          <div className="cockpit-main">
+            {/* 1. Today's Rehabilitation Routine */}
+            <TodaysExercises
+              exercises={exercises}
+              onCompleteExercise={async (exerciseId, planId, completionData) => {
+                await apiRequest(`/exercises/patient/${exerciseId}/complete`, {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    planId,
+                    painLevel: completionData.painLevel,
+                    mobilityScore: completionData.mobilityScore,
+                    notes: completionData.notes,
+                  }),
+                })
+                await loadDashboard()
+              }}
+              onActivateStarterPlan={handleActivateStarterOnDashboard}
+              activatingStarter={activatingStarter}
+            />
 
-          {/* 2. Recovery Goal */}
-          <RecoveryGoal recoveryGoal={recoveryGoal} />
+            {/* 2. Program Recovery Overview */}
+            <RecoveryOverview recovery={recovery} />
 
-          {/* 3. Today's Recovery */}
-          <TodaysExercises
-            exercises={exercises}
-            onCompleteExercise={async (exerciseId, planId, completionData) => {
-              await apiRequest(`/exercises/patient/${exerciseId}/complete`, {
-                method: 'POST',
-                body: JSON.stringify({
-                  planId,
-                  painLevel: completionData.painLevel,
-                  mobilityScore: completionData.mobilityScore,
-                  notes: completionData.notes,
-                }),
-              })
-              await loadDashboard()
-            }}
-          />
+            {/* 3. Pain & Mobility Check-In */}
+            <PainJournalCard
+              todayEntry={dashboard?.painJournal?.todayEntry}
+              onOpenLogModal={handleOpenJournalModal}
+            />
 
-          {/* 4. Pain & Mobility Journal */}
-          <PainJournalCard
-            todayEntry={dashboard?.painJournal?.todayEntry}
-            onOpenLogModal={handleOpenJournalModal}
-          />
+            {/* 4. Detailed Clinical Signals & Progress Trajectory (when progress exists) */}
+            {((progressSummary?.totalSessions ?? 0) > 0 || (progressSummary?.recentEntries?.length ?? 0) > 0) && (
+              <ProgressSummary progressSummary={progressSummary} />
+            )}
+          </div>
 
-          {/* 5. Next Appointment */}
-          <NextAppointment appointment={appointment} />
+          {/* Sidebar Column (35%): Care Team & Telehealth Hub */}
+          <div className="cockpit-side">
+            {/* 1. Next Virtual Consultation / Telehealth */}
+            <NextAppointment appointment={appointment} />
 
-          {/* 6. Patient Profile Summary */}
-          <ProfileSummary profile={profile} user={user} onProfileUpdated={loadDashboard} />
+            {/* 2. Recovery Goal Objective (Right Side) */}
+            <RecoveryGoal recoveryGoal={recoveryGoal} />
 
-          {/* 7. Progress Summary */}
-          <ProgressSummary progressSummary={progressSummary} />
+            {/* 3. Care Team / Clinician Profile Card */}
+            <section className="care-team-card-v2" aria-labelledby="care-team-title">
+              <div className="dashboard-card-heading">
+                <span className="card-eyebrow">Clinical Supervision</span>
+                <h3 id="care-team-title">Your Care Clinician</h3>
+              </div>
+              <div className="clinician-profile-box">
+                <div className="clinician-avatar" aria-hidden="true">
+                  {(profile.assignedTherapist?.name || 'C').charAt(0).toUpperCase()}
+                </div>
+                <div className="clinician-info">
+                  <strong>{profile.assignedTherapist?.name || 'MoveCare Clinical Team'}</strong>
+                  <span>{profile.assignedTherapist?.specialization || 'Licensed Physical Therapy'}</span>
+                  <small style={{ display: 'block', color: '#64748b', fontSize: '0.78rem', marginTop: '0.2rem' }}>
+                    Overseeing your rehabilitation trajectory
+                  </small>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                <NavLink to="/appointments" className="primary-btn small" style={{ flex: 1, textAlign: 'center' }}>
+                  Book Follow-up
+                </NavLink>
+                <NavLink to="/notifications" className="secondary-btn small" style={{ flex: 1, textAlign: 'center' }}>
+                  Send Message
+                </NavLink>
+              </div>
+            </section>
+
+            {/* 3. Care Notifications & Messages */}
+            {notifications.length > 0 && (
+              <section className="dashboard-card notifications-dashboard-card" aria-labelledby="notifications-title">
+                <div className="dashboard-card-heading">
+                  <span className="card-eyebrow">Stay Informed</span>
+                  <div className="notifications-heading-row">
+                    <h3 id="notifications-title">Care Notifications</h3>
+                    <NavLink to="/notifications" className="view-all-link">
+                      Open Inbox ({notifications.length}) →
+                    </NavLink>
+                  </div>
+                </div>
+                <div className="notification-list">
+                  {notifications.slice(0, 3).map((notification) => (
+                    <div
+                      className={`notification-row ${notification.isRead ? '' : 'unread'}`}
+                      key={notification._id || notification.id}
+                    >
+                      <span className="notification-dot" aria-hidden="true" />
+                      <div className="notification-row-main">
+                        <strong>{notification.title}</strong>
+                        <p>{notification.message}</p>
+                        <small>{formatDate(notification.createdAt)}</small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
         </div>
 
-        {/* Pain Journal Check-in Modal */}
+        {/* Full Width Bottom: MoveCare AI Clinical Recommendations & Insights Suite */}
+        <div style={{ marginTop: '2.5rem' }}>
+          <RecommendationPanel />
+        </div>
+
+        {/* Modal 1: Full Clinical Profile Dossier Modal */}
+        {viewProfileOpen && (
+          <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="view-profile-title" onClick={() => setViewProfileOpen(false)}>
+            <div className="modal-card" style={{ maxWidth: '640px', padding: '2rem' }} onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header" style={{ marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div className="hero-avatar-v2" style={{ width: '3.5rem', height: '3.5rem', fontSize: '1.4rem' }}>
+                    {(profile?.name || user?.name || 'P').charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h3 id="view-profile-title" style={{ margin: 0, fontSize: '1.35rem', color: '#0f172a' }}>
+                      {profile?.name || user?.name}
+                    </h3>
+                    <small style={{ color: '#64748b' }}>{profile?.email || user?.email}</small>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="close-btn"
+                  onClick={() => setViewProfileOpen(false)}
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Dossier Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div style={{ background: '#f8fafc', padding: '0.9rem', borderRadius: '0.85rem', border: '1px solid #e2e8f0' }}>
+                  <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#0d9488', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>
+                    Medical Condition
+                  </span>
+                  <strong style={{ fontSize: '0.98rem', color: '#0f172a' }}>
+                    {profile?.medicalCondition && profile.medicalCondition !== 'Profile setup required' ? profile.medicalCondition : 'Not specified'}
+                  </strong>
+                </div>
+
+                <div style={{ background: '#f8fafc', padding: '0.9rem', borderRadius: '0.85rem', border: '1px solid #e2e8f0' }}>
+                  <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#0d9488', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>
+                    Attending Clinician
+                  </span>
+                  <strong style={{ fontSize: '0.98rem', color: '#0f172a' }}>
+                    {profile?.assignedTherapist?.name || 'MoveCare Clinical Team'}
+                  </strong>
+                  <small style={{ display: 'block', color: '#64748b', marginTop: '0.15rem' }}>
+                    {profile?.assignedTherapist?.specialization || 'Physical Therapy Specialist'}
+                  </small>
+                </div>
+
+                <div style={{ background: '#f8fafc', padding: '0.9rem', borderRadius: '0.85rem', border: '1px solid #e2e8f0' }}>
+                  <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#64748b', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>
+                    Date of Birth
+                  </span>
+                  <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>
+                    {formatDate(profile?.dateOfBirth)}
+                  </strong>
+                </div>
+
+                <div style={{ background: '#f8fafc', padding: '0.9rem', borderRadius: '0.85rem', border: '1px solid #e2e8f0' }}>
+                  <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#64748b', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>
+                    Gender
+                  </span>
+                  <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>
+                    {profile?.gender || 'Not specified'}
+                  </strong>
+                </div>
+
+                <div style={{ background: '#f8fafc', padding: '0.9rem', borderRadius: '0.85rem', border: '1px solid #e2e8f0' }}>
+                  <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#64748b', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>
+                    Contact Phone
+                  </span>
+                  <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>
+                    {profile?.phoneNumber || 'Not provided'}
+                  </strong>
+                </div>
+
+                <div style={{ background: '#f8fafc', padding: '0.9rem', borderRadius: '0.85rem', border: '1px solid #e2e8f0' }}>
+                  <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#64748b', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>
+                    Care Status
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.2rem' }}>
+                    <span className="status-dot active" />
+                    <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>
+                      {profile?.status || 'Active Patient'}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              {profile?.injuryDescription && (
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '0.85rem', padding: '1rem', marginBottom: '1.5rem' }}>
+                  <strong style={{ color: '#166534', fontSize: '0.85rem', display: 'block', marginBottom: '0.3rem' }}>
+                    📋 Clinical Symptoms & Injury Notes:
+                  </strong>
+                  <p style={{ margin: 0, color: '#14532d', fontSize: '0.92rem', lineHeight: 1.5 }}>
+                    {profile.injuryDescription}
+                  </p>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => setViewProfileOpen(false)}
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={handleOpenEditProfile}
+                >
+                  ✏️ Edit Profile Details
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal 2: Clinical Profile Edit Modal */}
+        {editProfileOpen && (
+          <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="edit-profile-modal-title" onClick={() => !profileSaving && setEditProfileOpen(false)}>
+            <div className="modal-card" style={{ maxWidth: '540px', padding: '2rem' }} onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header" style={{ marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+                <div>
+                  <span className="card-eyebrow">Patient Identity</span>
+                  <h3 id="edit-profile-modal-title" style={{ margin: 0 }}>Update Clinical Profile</h3>
+                </div>
+                <button
+                  type="button"
+                  className="close-btn"
+                  onClick={() => !profileSaving && setEditProfileOpen(false)}
+                  disabled={profileSaving}
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {profileError && <div className="form-error" role="alert" style={{ marginBottom: '1rem' }}>{profileError}</div>}
+
+              <form onSubmit={handleSaveProfile} className="assignment-form">
+                <label>
+                  Full Name
+                  <input
+                    type="text"
+                    value={profileFormData.name}
+                    onChange={(e) => setProfileFormData({ ...profileFormData, name: e.target.value })}
+                    placeholder="Your legal or preferred name"
+                    required
+                  />
+                </label>
+
+                <label>
+                  Medical Condition / Target Rehab Area
+                  <input
+                    type="text"
+                    value={profileFormData.medicalCondition}
+                    onChange={(e) => setProfileFormData({ ...profileFormData, medicalCondition: e.target.value })}
+                    placeholder="e.g. Knee Patellar Tendinitis, Shoulder Impingement"
+                    required
+                  />
+                </label>
+
+                <label>
+                  Injury Description & Symptoms
+                  <textarea
+                    value={profileFormData.injuryDescription}
+                    onChange={(e) => setProfileFormData({ ...profileFormData, injuryDescription: e.target.value })}
+                    placeholder="Describe pain triggers, previous surgery, or symptoms..."
+                    rows={3}
+                  />
+                </label>
+
+                <div className="form-row-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <label>
+                    Date of Birth
+                    <input
+                      type="date"
+                      value={profileFormData.dateOfBirth}
+                      onChange={(e) => setProfileFormData({ ...profileFormData, dateOfBirth: e.target.value })}
+                    />
+                  </label>
+
+                  <label>
+                    Gender
+                    <select
+                      value={profileFormData.gender}
+                      onChange={(e) => setProfileFormData({ ...profileFormData, gender: e.target.value })}
+                    >
+                      <option value="Female">Female</option>
+                      <option value="Male">Male</option>
+                      <option value="Non-Binary">Non-Binary</option>
+                      <option value="Other">Other</option>
+                      <option value="Prefer not to say">Prefer not to say</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label>
+                  Phone Number
+                  <input
+                    type="tel"
+                    value={profileFormData.phoneNumber}
+                    onChange={(e) => setProfileFormData({ ...profileFormData, phoneNumber: e.target.value })}
+                    placeholder="+1 (555) 000-0000"
+                  />
+                </label>
+
+                <div className="form-actions" style={{ marginTop: '1.5rem', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    onClick={() => setEditProfileOpen(false)}
+                    disabled={profileSaving}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="primary-btn"
+                    disabled={profileSaving}
+                  >
+                    {profileSaving ? 'Saving Updates...' : 'Save Profile Changes'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal 3: Pain Journal Check-in Modal */}
         {journalModalOpen && (
           <PainJournalFormModal
             initialEntry={journalModalEntry}
@@ -2090,42 +3041,6 @@ function PatientDashboardPage({ user }) {
             error={journalError}
           />
         )}
-
-        {/* Notifications preview if present */}
-        {notifications.length > 0 && (
-          <section className="dashboard-card notifications-dashboard-card" aria-labelledby="notifications-title">
-            <div className="dashboard-card-heading">
-              <span className="card-eyebrow">Stay Informed</span>
-              <div className="notifications-heading-row">
-                <h3 id="notifications-title">Care Notifications</h3>
-                <NavLink to="/notifications" className="view-all-link">
-                  Open Inbox ({notifications.length}) →
-                </NavLink>
-              </div>
-            </div>
-            <div className="notification-list">
-              {notifications.slice(0, 3).map((notification) => (
-                <div
-                  className={`notification-row ${notification.isRead ? '' : 'unread'}`}
-                  key={notification._id || notification.id}
-                >
-                  <span className="notification-dot" aria-hidden="true" />
-                  <div className="notification-row-main">
-                    <strong>{notification.title}</strong>
-                    <p>{notification.message}</p>
-                    <small>{formatDate(notification.createdAt)}</small>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Live Monitoring preview */}
-        <LiveMonitoringCard role="Patient" />
-
-        {/* AI Recommendations panel */}
-        <RecommendationPanel />
       </div>
     </main>
   )
@@ -2437,6 +3352,23 @@ function PatientExercisesPage() {
   const [submitting, setSubmitting] = useState(false)
   const [modalError, setModalError] = useState('')
   const [toastNotice, setToastNotice] = useState('')
+  const [activatingStarter, setActivatingStarter] = useState(false)
+  const [starterError, setStarterError] = useState('')
+
+  const handleActivateStarter = async () => {
+    try {
+      setActivatingStarter(true)
+      setStarterError('')
+      await apiRequest('/exercises/patient/starter-plan', { method: 'POST' })
+      setToastNotice('✨ Your personalized clinical rehabilitation routine is now active!')
+      setTimeout(() => setToastNotice(''), 6000)
+      await loadExercises()
+    } catch (err) {
+      setStarterError(err.message || 'Unable to activate routine. Please try again.')
+    } finally {
+      setActivatingStarter(false)
+    }
+  }
 
   const loadExercises = async () => {
     try {
@@ -2706,15 +3638,27 @@ function PatientExercisesPage() {
             </button>
           </div>
         ) : (
-          <div className="dashboard-panel empty-assigned-panel">
-            <span className="empty-icon" aria-hidden="true">📋</span>
-            <h3>No Assigned Exercises Yet</h3>
-            <p>
-              Your physical therapy clinician has not assigned any active rehabilitation plans to your account yet. When a plan is created, your tailored routine will appear here.
+          <div className="dashboard-panel empty-assigned-panel" style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#fff', borderRadius: '1.25rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
+            <span className="empty-icon" aria-hidden="true" style={{ fontSize: '3.2rem', display: 'inline-block', marginBottom: '1rem' }}>📋</span>
+            <h3 style={{ fontSize: '1.4rem', color: '#0f172a', marginBottom: '0.5rem', fontWeight: 700 }}>No Assigned Exercises Yet</h3>
+            <p style={{ maxWidth: '560px', margin: '0 auto 1.5rem', color: '#64748b', lineHeight: 1.6, fontSize: '0.95rem' }}>
+              Your clinical account has not received a prescribed routine yet. You can instantly activate our evidence-based clinical starter routine tailored to your condition, or wait for your therapist to prescribe one.
             </p>
-            <NavLink to="/dashboard" className="primary-btn small">
-              Return to Dashboard
-            </NavLink>
+            {starterError && <div className="form-error" role="alert" style={{ maxWidth: '480px', margin: '0 auto 1.25rem' }}>{starterError}</div>}
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="primary-btn"
+                disabled={activatingStarter}
+                onClick={handleActivateStarter}
+                style={{ padding: '0.75rem 1.5rem', fontSize: '0.95rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                {activatingStarter ? '✨ Activating Clinical Plan...' : '✨ Activate Tailored Rehabilitation Routine'}
+              </button>
+              <NavLink to="/dashboard" className="secondary-btn" style={{ padding: '0.75rem 1.25rem' }}>
+                Return to Dashboard
+              </NavLink>
+            </div>
           </div>
         )}
 

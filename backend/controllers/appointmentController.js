@@ -192,6 +192,16 @@ export const bookAppointment = async (req, res) => {
       });
     }
 
+    // Notify Patient of their submitted appointment request
+    await createNotification({
+      recipient: req.user._id,
+      type: 'Appointment',
+      title: 'Appointment Request Submitted',
+      message: `Your consultation request for ${date} from ${startTime} to ${endTime} has been submitted to Dr. ${therapist.name || 'your physical therapist'}.`,
+      priority: 'Normal',
+      relatedEntity: { entityType: 'Appointment', entityId: appointment._id },
+    });
+
     await logAuditEvent({
       action: 'APPOINTMENT_BOOKED',
       performedBy: req.user,
@@ -463,7 +473,20 @@ export const updateConsultationStatus = async (req, res) => {
         return res.status(403).json({ message: 'Only therapist can start or end consultation' });
       }
       appointment.consultationStatus = consultationStatus;
-      if (consultationStatus === 'Live') appointment.status = 'InProgress';
+      if (consultationStatus === 'Live') {
+        appointment.status = 'InProgress';
+        const patientUser = await Patient.findById(appointment.patient).select('user');
+        if (patientUser?.user) {
+          await createNotification({
+            recipient: patientUser.user,
+            type: 'Appointment',
+            title: 'Consultation Room is Live',
+            message: 'Your physical therapist has opened your consultation room. You may join the virtual room now.',
+            priority: 'Urgent',
+            relatedEntity: { entityType: 'Appointment', entityId: appointment._id },
+          });
+        }
+      }
       if (consultationStatus === 'Ended') appointment.status = 'Completed';
     }
 

@@ -119,7 +119,7 @@ async function preparePresentationData() {
       reps: 12,
       instructions: '1. Anchor elastic band around stable post.\n2. Step back until band has moderate tension.\n3. Straighten knee fully against resistance.\n4. Hold for 2 seconds and slowly relax.',
       precautions: 'Do not hyperextend the joint; maintain upright posture.',
-      videoUrl: 'https://example.com/videos/tke.mp4',
+      videoUrl: 'https://www.youtube.com/watch?v=kYJmQn-3h34',
     }),
   });
   const exData = await exCreateRes.json();

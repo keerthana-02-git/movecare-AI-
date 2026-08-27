@@ -16,6 +16,8 @@ const notificationSchema = new mongoose.Schema(
         'NewExercisePlan',
         'SystemAlert',
         'Message',
+        'MissedActivity',
+        'AIAlert',
       ],
       required: [true, 'Notification type is required'],
     },
@@ -32,7 +34,7 @@ const notificationSchema = new mongoose.Schema(
     relatedEntity: {
       entityType: {
         type: String,
-        enum: ['Appointment', 'Exercise', 'ExercisePlan', 'Patient', 'Therapist'],
+        enum: ['Appointment', 'Exercise', 'ExercisePlan', 'Patient', 'Therapist', 'Progress', 'AiRecommendation'],
       },
       entityId: mongoose.Schema.Types.ObjectId,
     },
@@ -62,6 +64,7 @@ notificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 // Index for efficient notification queries
 notificationSchema.index({ recipient: 1, isRead: 1, createdAt: -1 });
+notificationSchema.index({ recipient: 1, type: 1, 'relatedEntity.entityId': 1, createdAt: -1 });
 
 const Notification = mongoose.model('Notification', notificationSchema);
 

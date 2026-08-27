@@ -14,6 +14,73 @@ function getPainDescription(level) {
   return { label: `Severe / Sharp Pain (${num}/10)`, desc: 'Stop if sharp pain persists and inform therapist', color: '#ef4444' }
 }
 
+function getClinicalYouTubeFallback(name = '', bodyPart = '') {
+  const n = String(name || '').toLowerCase()
+  const b = String(bodyPart || '').toLowerCase()
+
+  if (n.includes('knee extension') || n.includes('tke') || n.includes('terminal')) {
+    return 'https://www.youtube-nocookie.com/embed/kYJmQn-3h34'
+  }
+  if (n.includes('quad') || n.includes('quadriceps')) {
+    return 'https://www.youtube-nocookie.com/embed/au62CidApd0'
+  }
+  if (n.includes('hamstring') || n.includes('curl') || n.includes('heel slide')) {
+    return 'https://www.youtube-nocookie.com/embed/Kz62CidApd0'
+  }
+  if (n.includes('chin tuck') || n.includes('cervical') || b.includes('neck')) {
+    return 'https://www.youtube-nocookie.com/embed/Xm8oB0bJzP0'
+  }
+  if (n.includes('scapular') || n.includes('wall slide') || n.includes('raise') || b.includes('shoulder')) {
+    return 'https://www.youtube-nocookie.com/embed/4y_v1tE4i4w'
+  }
+  if (n.includes('bridge') || n.includes('pelvic') || n.includes('cat') || b.includes('back') || b.includes('lumbar')) {
+    return 'https://www.youtube-nocookie.com/embed/wPM8icPu6H8'
+  }
+  if (b.includes('knee')) {
+    return 'https://www.youtube-nocookie.com/embed/kYJmQn-3h34'
+  }
+  return 'https://www.youtube-nocookie.com/embed/au62CidApd0'
+}
+
+function resolveVideoEmbed(videoUrl, exerciseName, targetBodyPart) {
+  if (!videoUrl || typeof videoUrl !== 'string' || !videoUrl.trim() || videoUrl.includes('example.com')) {
+    return {
+      type: 'youtube',
+      src: getClinicalYouTubeFallback(exerciseName, targetBodyPart),
+    }
+  }
+
+  const url = videoUrl.trim()
+
+  if (url.includes('youtube.com/watch?v=')) {
+    const videoId = url.split('watch?v=')[1]?.split('&')[0]
+    if (videoId) return { type: 'youtube', src: `https://www.youtube-nocookie.com/embed/${videoId}` }
+  }
+
+  if (url.includes('youtu.be/')) {
+    const videoId = url.split('youtu.be/')[1]?.split('?')[0]
+    if (videoId) return { type: 'youtube', src: `https://www.youtube-nocookie.com/embed/${videoId}` }
+  }
+
+  if (url.includes('youtube.com/embed/')) {
+    return { type: 'youtube', src: url }
+  }
+
+  if (url.includes('vimeo.com/')) {
+    const videoId = url.split('vimeo.com/')[1]?.split('?')[0]
+    if (videoId) return { type: 'vimeo', src: `https://player.vimeo.com/video/${videoId}` }
+  }
+
+  if (url.endsWith('.mp4') || url.endsWith('.webm')) {
+    return { type: 'video', src: url }
+  }
+
+  return {
+    type: 'youtube',
+    src: getClinicalYouTubeFallback(exerciseName, targetBodyPart),
+  }
+}
+
 export default function ExerciseDetailModal({
   item,
   onClose,
@@ -82,28 +149,35 @@ export default function ExerciseDetailModal({
 
   // Video embed helper
   const renderVideo = () => {
-    if (!ex.videoUrl || !ex.videoUrl.trim()) return null
+    const embed = resolveVideoEmbed(ex.videoUrl, ex.name, ex.targetBodyPart)
 
-    const url = ex.videoUrl.trim()
-    let embedUrl = null
-
-    if (url.includes('youtube.com/watch?v=')) {
-      const videoId = url.split('watch?v=')[1]?.split('&')[0]
-      if (videoId) embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}`
-    } else if (url.includes('youtu.be/')) {
-      const videoId = url.split('youtu.be/')[1]?.split('?')[0]
-      if (videoId) embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}`
-    } else if (url.includes('vimeo.com/')) {
-      const videoId = url.split('vimeo.com/')[1]?.split('?')[0]
-      if (videoId) embedUrl = `https://player.vimeo.com/video/${videoId}`
-    }
-
-    if (embedUrl) {
+    if (embed.type === 'youtube' || embed.type === 'vimeo') {
       return (
-        <div className="exercise-video-embed-container">
+        <div
+          className="exercise-video-embed-container"
+          style={{
+            position: 'relative',
+            paddingBottom: '56.25%',
+            height: 0,
+            overflow: 'hidden',
+            borderRadius: '0.85rem',
+            marginBottom: '1.25rem',
+            background: '#0f172a',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.12)',
+          }}
+        >
           <iframe
-            src={embedUrl}
+            src={`${embed.src}?rel=0&modestbranding=1&autoplay=0`}
             title={`${ex.name} Video Demonstration`}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              border: 0,
+              borderRadius: '0.85rem',
+            }}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
           />
@@ -111,25 +185,26 @@ export default function ExerciseDetailModal({
       )
     }
 
-    if (url.endsWith('.mp4') || url.endsWith('.webm')) {
+    if (embed.type === 'video') {
       return (
-        <div className="exercise-video-embed-container">
-          <video controls playsInline preload="metadata">
-            <source src={url} type="video/mp4" />
+        <div
+          className="exercise-video-embed-container"
+          style={{
+            borderRadius: '0.85rem',
+            overflow: 'hidden',
+            marginBottom: '1.25rem',
+            background: '#000',
+          }}
+        >
+          <video controls playsInline preload="metadata" style={{ width: '100%', maxHeight: '380px', display: 'block' }}>
+            <source src={embed.src} type="video/mp4" />
             Your browser does not support video playback.
           </video>
         </div>
       )
     }
 
-    return (
-      <div className="exercise-external-video-box">
-        <span>📹 External Video Demonstration Available</span>
-        <a href={url} target="_blank" rel="noreferrer" className="secondary-btn small">
-          Watch Video in New Tab ↗
-        </a>
-      </div>
-    )
+    return null
   }
 
   return (

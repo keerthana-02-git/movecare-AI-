@@ -4,6 +4,7 @@ import {
   Patient,
   Progress,
   Therapist,
+  User,
 } from '../models/index.js';
 import { ensureTherapistProfile } from './authController.js';
 import { ensurePatientProfile } from './patientController.js';
@@ -479,5 +480,242 @@ export const completePatientExercise = async (req, res) => {
     res.status(201).json(populatedProgress || progress);
   } catch (error) {
     res.status(400).json({ message: error.message || 'Unable to mark exercise complete' });
+  }
+};
+
+export const ensureDefaultExerciseLibrary = async (clinicianId = null) => {
+  const existingCount = await Exercise.countDocuments();
+  if (existingCount >= 5) return;
+
+  let assignedClinician = clinicianId;
+  if (!assignedClinician) {
+    const anyTherapist = await Therapist.findOne();
+    if (anyTherapist) {
+      assignedClinician = anyTherapist._id;
+    }
+  }
+
+  const defaultExercises = [
+    {
+      name: 'Quadriceps Set',
+      description: 'Isometric exercise to activate and strengthen quadriceps muscles with minimal joint pressure.',
+      category: 'Strengthening',
+      difficulty: 'Easy',
+      duration: 6,
+      sets: 3,
+      reps: 12,
+      instructions: '1. Lie or sit with legs straight. 2. Tighten the thigh muscles, pushing the back of your knee into the surface. 3. Hold for 5 seconds, relax, and repeat.',
+      precautions: 'Do not hold your breath. Stop if sharp knee pain develops.',
+      targetBodyPart: 'Knee',
+      videoUrl: 'https://www.youtube.com/watch?v=y3uVjJzB90E',
+      imageUrl: 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?auto=format&fit=crop&w=800&q=80',
+      ...(assignedClinician ? { createdBy: assignedClinician } : {}),
+    },
+    {
+      name: 'Hamstring Heel Slide',
+      description: 'Gentle knee flexion and hamstring strengthening exercise for lower extremity rehabilitation.',
+      category: 'Mobility',
+      difficulty: 'Easy',
+      duration: 8,
+      sets: 3,
+      reps: 10,
+      instructions: '1. Lie on back. 2. Slowly slide heel towards your glutes, bending knee. 3. Hold for 2 seconds. 4. Slide back to start smoothly.',
+      precautions: 'Avoid jerky movements; maintain smooth control.',
+      targetBodyPart: 'Knee',
+      videoUrl: 'https://www.youtube.com/watch?v=F3QfT08gR9Q',
+      imageUrl: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=800&q=80',
+      ...(assignedClinician ? { createdBy: assignedClinician } : {}),
+    },
+    {
+      name: 'Scapular Wall Slide',
+      description: 'Strengthens lower trapezius and serratus anterior while promoting optimal shoulder kinematics.',
+      category: 'Strengthening',
+      difficulty: 'Medium',
+      duration: 10,
+      sets: 3,
+      reps: 10,
+      instructions: '1. Stand with back and forearms against a wall. 2. Slowly slide forearms upwards maintaining wall contact. 3. Lower under control.',
+      precautions: 'Do not arch your lower back away from the wall.',
+      targetBodyPart: 'Shoulder',
+      videoUrl: 'https://www.youtube.com/watch?v=4y_v1tE4i4w',
+      imageUrl: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=800&q=80',
+      ...(assignedClinician ? { createdBy: assignedClinician } : {}),
+    },
+    {
+      name: 'Cervical Chin Tuck & Retraction',
+      description: 'Relieves anterior head carriage, reduces cervical spine load, and strengthens deep neck flexors.',
+      category: 'Postural',
+      difficulty: 'Easy',
+      duration: 5,
+      sets: 3,
+      reps: 10,
+      instructions: '1. Sit upright. 2. Gently glide chin straight backward as if making a double chin. 3. Hold for 5 seconds. 4. Release smoothly.',
+      precautions: 'Do not tilt chin downwards; move head purely horizontally.',
+      targetBodyPart: 'Neck',
+      videoUrl: 'https://www.youtube.com/watch?v=W5_gJ3o_Y2I',
+      imageUrl: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=800&q=80',
+      ...(assignedClinician ? { createdBy: assignedClinician } : {}),
+    },
+    {
+      name: 'Pelvic Bridging & Core Stabilization',
+      description: 'Activates gluteals, deep abdominal stabilizing musculature, and unloads the lumbar spine.',
+      category: 'Stability',
+      difficulty: 'Easy',
+      duration: 8,
+      sets: 3,
+      reps: 12,
+      instructions: '1. Lie on back with knees bent and feet flat. 2. Squeeze glutes and lift hips toward ceiling until thighs and torso align. 3. Hold 3s, lower slowly.',
+      precautions: 'Do not hyper-extend lower back past neutral.',
+      targetBodyPart: 'Back',
+      videoUrl: 'https://www.youtube.com/watch?v=wPM8icPu6H8',
+      imageUrl: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=800&q=80',
+      ...(assignedClinician ? { createdBy: assignedClinician } : {}),
+    },
+  ];
+
+  for (const ex of defaultExercises) {
+    const existing = await Exercise.findOne({ name: ex.name });
+    if (!existing) {
+      await Exercise.create(ex);
+    }
+  }
+};
+
+export const adoptStarterPlan = async (req, res) => {
+  try {
+    const patient = await ensurePatientProfile(req.user);
+    if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
+
+    // Check if patient already has an active plan
+    const existingPlan = await ExercisePlan.findOne({
+      patient: { $in: [patient._id, req.user._id] },
+      status: 'Active',
+    }).populate('exercises.exercise');
+
+    if (existingPlan && (existingPlan.exercises || []).some((item) => item && item.exercise)) {
+      return res.json({
+        message: 'Your active rehabilitation routine is ready.',
+        plan: existingPlan,
+      });
+    }
+
+    // Ensure clinician exists
+    let therapist = null;
+    if (patient.assignedTherapist) {
+      therapist = await Therapist.findById(patient.assignedTherapist);
+    }
+    if (!therapist) {
+      therapist = await Therapist.findOne({ status: 'Available' });
+    }
+    if (!therapist) {
+      therapist = await Therapist.findOne();
+    }
+    if (!therapist) {
+      // Find or create clinician user
+      let clinicianUser = await User.findOne({ role: 'Therapist' });
+      if (!clinicianUser) {
+        clinicianUser = await User.create({
+          name: 'MoveCare Clinical Team',
+          email: 'clinical.care@movecare.io',
+          password: 'MoveCareSecure2026!',
+          role: 'Therapist',
+        });
+      }
+      therapist = await Therapist.create({
+        user: clinicianUser._id,
+        licenseNumber: 'PT-CLINICAL-001',
+        specialization: 'Physical Therapy',
+        yearsOfExperience: 10,
+        status: 'Available',
+      });
+    }
+
+    // Ensure exercises in library
+    await ensureDefaultExerciseLibrary(therapist._id);
+
+    // Identify patient focus area from condition/injury
+    const condition = `${patient.medicalCondition || ''} ${patient.injuryDescription || ''}`.toLowerCase();
+    let bodyPartTarget = null;
+    if (condition.includes('knee') || condition.includes('patell') || condition.includes('acl') || condition.includes('menisc')) {
+      bodyPartTarget = 'Knee';
+    } else if (condition.includes('shoulder') || condition.includes('rotator') || condition.includes('scapul')) {
+      bodyPartTarget = 'Shoulder';
+    } else if (condition.includes('neck') || condition.includes('cervical') || condition.includes('spine')) {
+      bodyPartTarget = 'Neck';
+    } else if (condition.includes('back') || condition.includes('lumbar') || condition.includes('disc') || condition.includes('sciat')) {
+      bodyPartTarget = 'Back';
+    }
+
+    let selectedExercises = [];
+    if (bodyPartTarget) {
+      selectedExercises = await Exercise.find({ targetBodyPart: bodyPartTarget }).limit(3);
+    }
+    if (selectedExercises.length === 0) {
+      selectedExercises = await Exercise.find().limit(3);
+    }
+
+    if (selectedExercises.length === 0) {
+      return res.status(500).json({ message: 'No clinical exercises available to assign' });
+    }
+
+    // Link patient to therapist
+    patient.assignedTherapist = therapist._id;
+    await patient.save();
+
+    if (!therapist.patientsAssigned) therapist.patientsAssigned = [];
+    if (!therapist.patientsAssigned.some((id) => String(id) === String(patient._id))) {
+      therapist.patientsAssigned.push(patient._id);
+      await therapist.save();
+    }
+
+    const planName = bodyPartTarget
+      ? `${bodyPartTarget} Rehabilitation & Functional Recovery Routine`
+      : 'Full-Body Foundation Mobility & Recovery Routine';
+
+    const exerciseItems = selectedExercises.map((ex, index) => ({
+      exercise: ex._id,
+      frequency: 'Daily',
+      order: index + 1,
+      targetSets: ex.sets || 3,
+      targetReps: ex.reps || 10,
+    }));
+
+    const plan = await ExercisePlan.create({
+      patient: patient._id,
+      therapist: therapist._id,
+      name: planName,
+      exercises: exerciseItems,
+      startDate: new Date(),
+      endDate: new Date(Date.now() + 28 * 86400000), // 28 days
+      status: 'Active',
+      description: `Tailored clinical starter routine generated for ${patient.medicalCondition || 'functional recovery'}.`,
+    });
+
+    await createNotification({
+      recipient: patient.user,
+      type: 'NewExercisePlan',
+      title: 'Personalized recovery routine activated',
+      message: `Your ${planName} is now active with ${selectedExercises.length} prescribed exercises.`,
+      relatedEntity: { entityType: 'ExercisePlan', entityId: plan._id },
+    });
+
+    await logAuditEvent({
+      action: 'EXERCISE_ASSIGNED',
+      performedBy: req.user,
+      performedByRole: req.user.role,
+      targetEntity: { entityType: 'ExercisePlan', entityId: plan._id },
+      details: {
+        patientId: patient._id,
+        planName: plan.name,
+        assignedExercisesCount: selectedExercises.length,
+        type: 'StarterPlanActivation',
+      },
+      req,
+    });
+
+    const populatedPlan = await ExercisePlan.findById(plan._id).populate('exercises.exercise');
+    res.status(201).json(populatedPlan);
+  } catch (error) {
+    res.status(400).json({ message: error.message || 'Unable to activate starter routine' });
   }
 };

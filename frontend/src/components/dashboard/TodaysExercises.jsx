@@ -2,7 +2,12 @@ import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import ExerciseDetailModal from '../exercises/ExerciseDetailModal'
 
-export default function TodaysExercises({ exercises, onCompleteExercise }) {
+export default function TodaysExercises({
+  exercises,
+  onCompleteExercise,
+  onActivateStarterPlan,
+  activatingStarter = false,
+}) {
   const [activeModalItem, setActiveModalItem] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [modalError, setModalError] = useState('')
@@ -134,6 +139,28 @@ export default function TodaysExercises({ exercises, onCompleteExercise }) {
             </NavLink>
           </div>
         </>
+      ) : onActivateStarterPlan ? (
+        <div className="starter-routine-banner">
+          <span style={{ fontSize: '2.5rem', display: 'inline-block' }}>✨</span>
+          <h4>Ready to Begin Your Recovery?</h4>
+          <p>
+            You do not have any active rehabilitation plans assigned yet. You can instantly activate our clinical recovery routine tailored to your condition right now!
+          </p>
+          <div style={{ display: 'flex', gap: '0.85rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={onActivateStarterPlan}
+              disabled={activatingStarter}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+            >
+              {activatingStarter ? '✨ Activating Routine...' : '✨ Activate Tailored Routine'}
+            </button>
+            <NavLink to="/my-exercises" className="secondary-btn small">
+              Browse Library
+            </NavLink>
+          </div>
+        </div>
       ) : (
         <div className="empty-exercises-state">
           <span className="empty-state-icon" aria-hidden="true">🧘</span>

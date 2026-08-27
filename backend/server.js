@@ -13,6 +13,7 @@ import aiRoutes from './routes/aiRoutes.js';
 import monitoringRoutes from './routes/monitoringRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import { startAutomationScheduler } from './services/automationService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -72,6 +73,9 @@ app.use('/api/admin', adminRoutes);
 
 const startServer = async (port = PORT) => {
   await connectDB();
+  if (process.env.NODE_ENV !== 'test') {
+    startAutomationScheduler();
+  }
   return new Promise((resolve) => {
     const server = app.listen(port, '0.0.0.0', () => {
       console.log(`Backend running on http://localhost:${port}`);

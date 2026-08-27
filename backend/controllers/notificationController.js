@@ -1,19 +1,47 @@
 import { Notification, Patient, Therapist } from '../models/index.js';
 import { ensureTherapistProfile } from './authController.js';
+import { runAllAutomation } from '../services/automationService.js';
 
 export const createNotification = (data) => Notification.create(data);
 
 export const listNotifications = async (req, res) => {
   try {
-    const limit = Math.min(Number(req.query.limit) || 30, 100);
-    const notifications = await Notification.find({ recipient: req.user._id })
+    const limit = Math.min(Number(req.query.limit) || 50, 100);
+    const filter = { recipient: req.user._id };
+
+    if (req.query.type) {
+      filter.type = req.query.type;
+    }
+
+    if (req.query.isRead !== undefined) {
+      filter.isRead = req.query.isRead === 'true';
+    }
+
+    const notifications = await Notification.find(filter)
       .sort({ isRead: 1, createdAt: -1 })
       .limit(limit)
       .lean();
-    const unreadCount = await Notification.countDocuments({ recipient: req.user._id, isRead: false });
+
+    const unreadCount = await Notification.countDocuments({
+      recipient: req.user._id,
+      isRead: false,
+    });
+
     res.json({ notifications, unreadCount });
   } catch (error) {
-    res.status(500).json({ message: 'Unable to load notifications' });
+    res.status(500).json({ message: 'Unable to load notifications', error: error.message });
+  }
+};
+
+export const getUnreadCount = async (req, res) => {
+  try {
+    const unreadCount = await Notification.countDocuments({
+      recipient: req.user._id,
+      isRead: false,
+    });
+    res.json({ unreadCount });
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to get unread count' });
   }
 };
 
@@ -43,6 +71,19 @@ export const markAllNotificationsRead = async (req, res) => {
   }
 };
 
+export const deleteNotification = async (req, res) => {
+  try {
+    const notification = await Notification.findOneAndDelete({
+      _id: req.params.id,
+      recipient: req.user._id,
+    });
+    if (!notification) return res.status(404).json({ message: 'Notification not found' });
+    res.json({ message: 'Notification deleted successfully', id: req.params.id });
+  } catch (error) {
+    res.status(400).json({ message: error.message || 'Unable to delete notification' });
+  }
+};
+
 export const createTherapistMessage = async (req, res) => {
   try {
     const { patientId, title, message, priority = 'Normal', type = 'Message' } = req.body;
@@ -69,5 +110,17 @@ export const createTherapistMessage = async (req, res) => {
     res.status(201).json(notification);
   } catch (error) {
     res.status(400).json({ message: error.message || 'Unable to send message' });
+  }
+};
+
+export const triggerAutomation = async (req, res) => {
+  try {
+    const result = await runAllAutomation();
+    res.json({
+      message: 'Automation cycle completed successfully',
+      result,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Automation execution failed', error: error.message });
   }
 };

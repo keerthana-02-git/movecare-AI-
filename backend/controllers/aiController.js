@@ -303,6 +303,48 @@ export const analyzeProgress = async (req, res) => {
         'The MoveCare Progress Analyzer provides software-generated observations based on your self-reported logs. It is not a clinical diagnosis. Discuss results with your physical therapist.',
     });
 
+    // If high pain detected (>= 7), generate AIAlert for patient and clinician
+    if (avgPain !== null && avgPain >= 7) {
+      const startOfToday = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+      const alreadyNotified = await Notification.findOne({
+        recipient: req.user._id,
+        type: 'AIAlert',
+        createdAt: { $gte: startOfToday },
+      });
+      if (!alreadyNotified) {
+        await Notification.create({
+          recipient: req.user._id,
+          type: 'AIAlert',
+          title: 'AI Clinical Alert: Elevated Pain',
+          message: `Elevated pain level (${avgPain}/10) detected in your recent logs. Low-intensity movements and rest recommended.`,
+          priority: 'High',
+          relatedEntity: { entityType: 'Patient', entityId: patient._id },
+        });
+      }
+
+      if (patient.assignedTherapist) {
+        const therapistDoc = await Therapist.findById(patient.assignedTherapist).select('user');
+        if (therapistDoc?.user) {
+          const alreadyNotifiedDoc = await Notification.findOne({
+            recipient: therapistDoc.user,
+            type: 'AIAlert',
+            'relatedEntity.entityId': patient._id,
+            createdAt: { $gte: startOfToday },
+          });
+          if (!alreadyNotifiedDoc) {
+            await Notification.create({
+              recipient: therapistDoc.user,
+              type: 'AIAlert',
+              title: 'Patient Severe Pain Alert',
+              message: `Patient ${req.user.name || 'Patient'} has logged an elevated average pain of ${avgPain}/10 during progress analysis.`,
+              priority: 'Urgent',
+              relatedEntity: { entityType: 'Patient', entityId: patient._id },
+            });
+          }
+        }
+      }
+    }
+
     res.json({
       analysisId: savedRec._id,
       generatedAt: savedRec.createdAt,
@@ -868,9 +910,33 @@ export const evaluatePatientAgent = async (req, res) => {
       notificationToDispatch = {
         title: 'Pain Alert & Plan Adaptation',
         message: `We noticed your recent pain report is ${currentPain}/10. High-load movements have been paused. Please perform only gentle stretches and notify your physical therapist.`,
-        type: 'ProgressUpdate',
+        type: 'AIAlert',
         priority: 'High',
+        relatedEntity: { entityType: 'Patient', entityId: patient._id },
       };
+
+      // Also escalate to assigned therapist
+      if (patient.assignedTherapist) {
+        const therapistUser = await Therapist.findById(patient.assignedTherapist).select('user');
+        if (therapistUser?.user) {
+          const therapistAlreadyAlerted = await Notification.findOne({
+            recipient: therapistUser.user,
+            type: 'AIAlert',
+            'relatedEntity.entityId': patient._id,
+            createdAt: { $gte: startOfToday },
+          });
+          if (!therapistAlreadyAlerted) {
+            await Notification.create({
+              recipient: therapistUser.user,
+              type: 'AIAlert',
+              title: 'Clinical Alert: Severe Pain Reported',
+              message: `Patient ${req.user.name || 'Patient'} reported high pain (${currentPain}/10). Review recommended.`,
+              priority: 'Urgent',
+              relatedEntity: { entityType: 'Patient', entityId: patient._id },
+            });
+          }
+        }
+      }
     } else if (daysSinceLastActive >= 2) {
       actionsDecided.push('Trigger gentle inactivity check-in');
       notificationToDispatch = {
