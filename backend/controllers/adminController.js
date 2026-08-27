@@ -294,3 +294,77 @@ export const getAuditLogs = async (req, res) => {
     res.status(500).json({ message: 'Unable to retrieve audit logs' });
   }
 };
+
+export const purgeJunkTestData = async (req, res) => {
+  try {
+    const preservedEmails = new Set([
+      'admin.presentation@movecare.io',
+      'dr.welby.presentation@movecare.io',
+      'eleanor.presentation@movecare.io',
+      'narmadha123@gmail.com',
+      'prarth12@gmail.com',
+      'kiruthikad03@gmail.com',
+      'keerthana.r.cse.2024@snsce.ac.in',
+      'marcus.chen@movecare.io',
+      'sarah.jenkins@movecare.io',
+      'david.miller@movecare.io',
+    ]);
+
+    const allUsers = await User.find({}).lean();
+    const toDeleteUsers = allUsers.filter((u) => !preservedEmails.has(u.email.toLowerCase()));
+    const toDeleteUserIds = toDeleteUsers.map((u) => u._id);
+
+    const toDeletePatients = await Patient.find({ user: { $in: toDeleteUserIds } }).lean();
+    const toDeletePatientIds = toDeletePatients.map((p) => p._id);
+
+    const toDeleteTherapists = await Therapist.find({ user: { $in: toDeleteUserIds } }).lean();
+    const toDeleteTherapistIds = toDeleteTherapists.map((t) => t._id);
+
+    await Promise.all([
+      Appointment.deleteMany({
+        $or: [
+          { patient: { $in: toDeletePatientIds } },
+          { therapist: { $in: toDeleteTherapistIds } },
+        ],
+      }),
+      ExercisePlan.deleteMany({
+        $or: [
+          { patient: { $in: toDeletePatientIds } },
+          { therapist: { $in: toDeleteTherapistIds } },
+        ],
+      }),
+      Progress.deleteMany({ patient: { $in: toDeletePatientIds } }),
+      Patient.deleteMany({ _id: { $in: toDeletePatientIds } }),
+      Therapist.deleteMany({ _id: { $in: toDeleteTherapistIds } }),
+      User.deleteMany({ _id: { $in: toDeleteUserIds } }),
+    ]);
+
+    // Ensure Eleanor Vance is assigned to our active therapists
+    const eleanorUser = await User.findOne({ email: 'eleanor.presentation@movecare.io' });
+    let eleanorPatient = null;
+    if (eleanorUser) {
+      eleanorPatient = await Patient.findOne({ user: eleanorUser._id });
+    }
+
+    if (eleanorPatient) {
+      const activeTherapists = await Therapist.find({});
+      for (const t of activeTherapists) {
+        if (!t.patientsAssigned || !t.patientsAssigned.some((id) => String(id) === String(eleanorPatient._id))) {
+          t.patientsAssigned = [eleanorPatient._id];
+          await t.save();
+        }
+      }
+    }
+
+    res.json({
+      message: 'Junk data purged successfully',
+      deletedUsersCount: toDeleteUserIds.length,
+      deletedPatientsCount: toDeletePatientIds.length,
+      deletedTherapistsCount: toDeleteTherapistIds.length,
+      remainingUsers: await User.countDocuments(),
+      remainingPatients: await Patient.countDocuments(),
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Failed to purge junk test data' });
+  }
+};

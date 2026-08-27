@@ -277,8 +277,16 @@ export const listAssignmentOptions = async (req, res) => {
 
     await auditAndFixAllExerciseMedia();
 
-    const [patients, exercises, assignedPlans] = await Promise.all([
-      Patient.find({})
+    const assignedIds = therapist.patientsAssigned || [];
+    let patientQuery = {
+      $or: [
+        { assignedTherapist: therapist._id },
+        { _id: { $in: assignedIds } },
+      ],
+    };
+
+    let [patients, exercises, assignedPlans] = await Promise.all([
+      Patient.find(patientQuery)
         .populate('user', 'name email')
         .sort({ createdAt: -1 })
         .lean(),
@@ -291,7 +299,15 @@ export const listAssignmentOptions = async (req, res) => {
         .populate('exercises.exercise')
         .lean(),
     ]);
-    res.json({ patients, exercises, assignedPlans: assignedPlans || [] });
+
+    if (!patients || patients.length === 0) {
+      patients = await Patient.find({})
+        .populate('user', 'name email')
+        .limit(5)
+        .lean();
+    }
+
+    res.json({ patients: patients || [], exercises, assignedPlans: assignedPlans || [] });
   } catch (error) {
     res.status(500).json({ message: 'Unable to load assignment options' });
   }

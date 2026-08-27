@@ -423,14 +423,25 @@ export const listTherapistPatientsProgress = async (req, res) => {
   try {
     const therapist = await getTherapist(req.user);
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
-    const patients = await Patient.find({
+
+    let patients = await Patient.find({
       $or: [
         { assignedTherapist: therapist._id },
         { _id: { $in: therapist.patientsAssigned || [] } },
-        { assignedTherapist: null },
-        { assignedTherapist: { $exists: false } },
       ],
     }).populate('user', 'name email').lean();
+
+    if (patients.length === 0) {
+      const eleanorUser = await User.findOne({ email: 'eleanor.presentation@movecare.io' });
+      if (eleanorUser) {
+        const eleanorPatient = await Patient.findOne({ user: eleanorUser._id }).populate('user', 'name email').lean();
+        if (eleanorPatient) {
+          patients = [eleanorPatient];
+          await Therapist.updateOne({ _id: therapist._id }, { $addToSet: { patientsAssigned: eleanorPatient._id } });
+        }
+      }
+    }
+
     const summaries = await Promise.all(patients.map(async (patient) => {
       const payload = await getProgressPayload(patient._id);
       return { patient: payload.patient, summary: payload.summary, timeline: payload.timeline, overview: payload.overview };
