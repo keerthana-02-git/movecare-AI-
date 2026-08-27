@@ -334,9 +334,17 @@ const buildTimeline = (progress) => {
 export const getProgressPayload = async (patientId) => {
   const [patient, progress, appointments, plans, journals] = await Promise.all([
     Patient.findById(patientId).populate('user', 'name email').lean(),
-    Progress.find({ patient: patientId }).sort({ datePerformed: 1 }).populate('exercise', 'name category targetBodyPart difficulty').lean(),
-    Appointment.find({ patient: patientId }).sort({ appointmentDate: 1 }).lean(),
-    ExercisePlan.find({ patient: patientId, status: { $in: ['Active', 'Paused', 'Completed'] } }).lean(),
+    Progress.find({ patient: patientId })
+      .sort({ datePerformed: 1 })
+      .populate('exercise', 'name category targetBodyPart difficulty duration sets reps instructions precautions videoUrl imageUrl')
+      .lean(),
+    Appointment.find({ patient: patientId })
+      .sort({ appointmentDate: 1 })
+      .populate('therapist', 'specialization user')
+      .lean(),
+    ExercisePlan.find({ patient: patientId, status: { $in: ['Active', 'Paused', 'Completed'] } })
+      .populate('exercises.exercise')
+      .lean(),
     PainJournal.find({ patient: patientId }).sort({ dateString: 1, createdAt: 1 }).lean(),
   ]);
 
@@ -379,6 +387,9 @@ export const getProgressPayload = async (patientId) => {
     entries: progress,
     timeline: buildTimeline(progress),
     summary: buildSummary(progress, appointments, plans),
+    appointments,
+    plans,
+    painJournal: journals,
   };
 };
 
@@ -436,6 +447,19 @@ export const getTherapistPatientProgress = async (req, res) => {
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
     const patient = await Patient.findById(req.params.patientId);
     if (!patient) return res.status(404).json({ message: 'Patient not found' });
+
+    const isAssigned =
+      !patient.assignedTherapist ||
+      String(patient.assignedTherapist) === String(therapist._id) ||
+      (therapist.patientsAssigned || []).some((id) => String(id) === String(patient._id));
+
+    if (!isAssigned) {
+      const hasConnection = await Appointment.exists({ therapist: therapist._id, patient: patient._id });
+      if (!hasConnection) {
+        return res.status(403).json({ message: 'You are not authorized to view this patient record' });
+      }
+    }
+
     res.json(await getProgressPayload(patient._id));
   } catch (error) {
     res.status(500).json({ message: 'Unable to load patient progress' });

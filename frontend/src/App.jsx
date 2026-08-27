@@ -1083,11 +1083,21 @@ function TherapistDashboardPage({ user }) {
 
   const loadDashboard = async () => {
     try {
-      const [patients, appointments, options, recommendations] = await Promise.all([
-        apiRequest('/progress/patients'), apiRequest('/appointments/therapist'),
-        apiRequest('/exercises/assignment-options'), apiRequest('/ai/therapist/recommendations'),
+      const [patients, appointments, options, recommendations, notifs] = await Promise.all([
+        apiRequest('/progress/patients'),
+        apiRequest('/appointments/therapist'),
+        apiRequest('/exercises/assignment-options'),
+        apiRequest('/ai/therapist/recommendations'),
+        apiRequest('/notifications?limit=5').catch(() => ({ notifications: [], unreadCount: 0 })),
       ])
-      setData({ patients, appointments, options, recommendations })
+      setData({
+        patients,
+        appointments,
+        options,
+        recommendations,
+        notifications: notifs?.notifications || [],
+        unreadAlerts: notifs?.unreadCount || 0,
+      })
       setSelectedId((current) => current || patients[0]?.patient?._id || '')
       setError('')
     } catch (loadError) { setError(loadError.message) }
@@ -1111,7 +1121,39 @@ function TherapistDashboardPage({ user }) {
   return <main className="page-shell dashboard-page therapist-dashboard-page"><div className="container management-wrap">
     <div className="dashboard-hero"><div><span className="eyebrow accent">Therapist workspace</span><h2>Good to see you, {user.name.split(' ')[0]}.</h2><p>Your assigned caseload, schedule, and clinical signals in one place.</p></div><div className="dashboard-avatar" aria-hidden="true">{user.name.charAt(0)}</div></div>
     {error && <div className="form-error" role="alert">{error}</div>}
-    <div className="therapist-stat-grid"><ProgressMetric label="Assigned patients" value={data.patients.length} /><ProgressMetric label="Upcoming consultations" value={upcoming.length} /><ProgressMetric label="Pending requests" value={data.appointments.filter((item) => item.status === 'Scheduled').length} /><ProgressMetric label="Average adherence" value={averageAdherence} suffix="%" /></div>
+    <div className="therapist-stat-grid">
+      <ProgressMetric label="Assigned patients" value={data.patients.length} />
+      <ProgressMetric label="Upcoming consultations" value={upcoming.length} />
+      <ProgressMetric label="Pending requests" value={data.appointments.filter((item) => item.status === 'Scheduled').length} />
+      <ProgressMetric label="Library exercises" value={data.options.exercises.length} />
+      <ProgressMetric label="Average adherence" value={averageAdherence} suffix="%" />
+    </div>
+    {data.notifications.length > 0 && (
+      <section className="management-panel" style={{ marginBottom: '1.5rem' }}>
+        <div className="panel-heading">
+          <div>
+            <span className="card-eyebrow">Clinical alerts & messages</span>
+            <h3>Inbox updates ({data.unreadAlerts} unread)</h3>
+          </div>
+          <NavLink className="secondary-btn small" to="/notifications">Open inbox</NavLink>
+        </div>
+        <div className="appointment-list">
+          {data.notifications.slice(0, 3).map((n) => (
+            <article className={`appointment-row ${n.isRead ? '' : 'unread'}`} key={n._id}>
+              <div className="appointment-date">
+                <strong>{formatDate(n.createdAt)}</strong>
+                <span>{n.type || 'Alert'}</span>
+              </div>
+              <div className="appointment-main">
+                <strong>{n.title}</strong>
+                <small>{n.message}</small>
+              </div>
+              <span className={`appointment-status ${n.isRead ? 'completed' : 'scheduled'}`}>{n.isRead ? 'Read' : 'New'}</span>
+            </article>
+          ))}
+        </div>
+      </section>
+    )}
     <div className="therapist-dashboard-grid">
       <section className="management-panel patient-directory"><div className="panel-heading"><div><span className="card-eyebrow">Care roster</span><h3>Assigned patients</h3></div><span className="count-badge">{data.patients.length}</span></div>{data.patients.length ? data.patients.map((item) => <button type="button" className={`patient-progress-option ${selectedId === item.patient._id ? 'selected' : ''}`} key={item.patient._id} onClick={() => setSelectedId(item.patient._id)}><span className="therapist-initial">{item.patient.user?.name?.charAt(0)}</span><span><strong>{item.patient.user?.name}</strong><small>{item.patient.medicalCondition} · {item.summary.exerciseAdherence}% adherence</small></span></button>) : <p className="empty-state">No assigned patients found.</p>}</section>
       <section className="management-panel patient-profile-card"><div className="panel-heading"><div><span className="card-eyebrow">Patient profile</span><h3>{selected?.patient.user?.name || 'Select a patient'}</h3></div>{selected && <NavLink className="secondary-btn small" to={`/patient-progress?patient=${selected.patient._id}`}>View progress</NavLink>}</div>{selected ? <><dl className="profile-list"><div><dt>Condition</dt><dd>{selected.patient.medicalCondition}</dd></div><div><dt>Injury</dt><dd>{selected.patient.injuryDescription || 'Not recorded'}</dd></div><div><dt>Date of birth</dt><dd>{formatDate(selected.patient.dateOfBirth)}</dd></div><div><dt>Status</dt><dd>{selected.patient.status}</dd></div><div><dt>Email</dt><dd>{selected.patient.user?.email}</dd></div></dl><div className="profile-stat-row"><span><strong>{selected.summary.exerciseAdherence}%</strong> adherence</span><span><strong>{selected.summary.mobilityScore ?? '--'}</strong> mobility</span><span><strong>{selected.summary.averagePain ?? '--'}</strong> pain</span></div></> : <p className="empty-state">Select an assigned patient to review their profile.</p>}</section>
@@ -2245,8 +2287,165 @@ function TherapistProgressPage() {
   useEffect(() => { apiRequest('/progress/patients').then((data) => { setPatients(data); const requestedId = searchParams.get('patient'); setSelectedId(data.some((item) => item.patient._id === requestedId) ? requestedId : data[0]?.patient?._id || '') }).catch((loadError) => setError(loadError.message)) }, [searchParams])
   useEffect(() => { if (selectedId) apiRequest(`/progress/patients/${selectedId}`).then(setDetail).catch((loadError) => setError(loadError.message)) }, [selectedId])
   if (error && !patients) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
-  if (!patients) return <LoadingDashboard />
-  return <main className="page-shell"><div className="container management-wrap"><div className="management-heading"><span className="eyebrow accent">Therapist workspace</span><h2>Patient progress</h2><p>Review adherence, session signals, and attendance for your assigned patients.</p></div>{error && <div className="form-error" role="alert">{error}</div>}<div className="therapist-progress-layout"><section className="management-panel patient-progress-list"><h3>Assigned patients</h3>{patients.length ? patients.map((item) => <button type="button" className={`patient-progress-option ${selectedId === item.patient._id ? 'selected' : ''}`} key={item.patient._id} onClick={() => setSelectedId(item.patient._id)}><span className="therapist-initial">{item.patient.user?.name?.charAt(0)}</span><span><strong>{item.patient.user?.name}</strong><small>{item.summary.exerciseAdherence}% adherence · {item.summary.completedSessions} sessions</small></span></button>) : <p className="empty-state">No assigned patients found.</p>}</section>{detail ? <section className="patient-progress-detail"><div className="progress-detail-heading"><div><span className="eyebrow accent">Patient record</span><h3>{detail.patient.user?.name}</h3><p>{detail.patient.medicalCondition}</p></div></div><div className="progress-metrics"><ProgressMetric label="Adherence" value={detail.summary.exerciseAdherence} suffix="%" /><ProgressMetric label="Completed" value={detail.summary.completedSessions} /><ProgressMetric label="Mobility" value={detail.summary.mobilityScore} suffix="/100" /><ProgressMetric label="Attendance" value={detail.summary.appointmentAttendance} suffix="%" /></div><div className="progress-chart-grid"><section className="management-panel chart-panel"><h3>Completion trend</h3><ProgressChart data={detail.timeline} dataKey="completionRate" color="#0d8b85" emptyLabel="No completion data yet." /></section><section className="management-panel chart-panel"><h3>Mobility trend</h3><ProgressChart data={detail.timeline.filter((item) => item.mobilityScore !== null)} dataKey="mobilityScore" color="#2b77d1" emptyLabel="No mobility data yet." /></section></div></section> : <div className="management-panel"><p className="empty-state">Select a patient to view progress.</p></div>}</div></div></main>
+  return (
+    <main className="page-shell">
+      <div className="container management-wrap">
+        <div className="management-heading">
+          <span className="eyebrow accent">Therapist workspace</span>
+          <h2>Patient progress & clinical management</h2>
+          <p>Review adherence, session signals, assigned plans, pain journal, and attendance for your assigned patients.</p>
+        </div>
+        {error && <div className="form-error" role="alert">{error}</div>}
+        <div className="therapist-progress-layout">
+          <section className="management-panel patient-progress-list">
+            <h3>Assigned patients</h3>
+            {patients.length ? (
+              patients.map((item) => (
+                <button
+                  type="button"
+                  className={`patient-progress-option ${selectedId === item.patient._id ? 'selected' : ''}`}
+                  key={item.patient._id}
+                  onClick={() => setSelectedId(item.patient._id)}
+                >
+                  <span className="therapist-initial">{item.patient.user?.name?.charAt(0)}</span>
+                  <span>
+                    <strong>{item.patient.user?.name}</strong>
+                    <small>{item.patient.medicalCondition} · {item.summary.exerciseAdherence}% adherence</small>
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="empty-state">No assigned patients found.</p>
+            )}
+          </section>
+          {detail ? (
+            <section className="patient-progress-detail">
+              <div className="progress-detail-heading">
+                <div>
+                  <span className="eyebrow accent">Patient record</span>
+                  <h3>{detail.patient.user?.name}</h3>
+                  <p>{detail.patient.medicalCondition} · {detail.patient.injuryDescription || 'No injury notes'}</p>
+                </div>
+              </div>
+              <div className="progress-metrics">
+                <ProgressMetric label="Adherence" value={detail.summary.exerciseAdherence} suffix="%" />
+                <ProgressMetric label="Completed" value={detail.summary.completedSessions} />
+                <ProgressMetric label="Mobility" value={detail.summary.mobilityScore} suffix="/100" />
+                <ProgressMetric label="Attendance" value={detail.summary.appointmentAttendance} suffix="%" />
+              </div>
+              <div className="progress-chart-grid">
+                <section className="management-panel chart-panel">
+                  <h3>Completion trend</h3>
+                  <ProgressChart data={detail.timeline} dataKey="completionRate" color="#0d8b85" emptyLabel="No completion data yet." />
+                </section>
+                <section className="management-panel chart-panel">
+                  <h3>Mobility trend</h3>
+                  <ProgressChart data={detail.timeline.filter((item) => item.mobilityScore !== null)} dataKey="mobilityScore" color="#2b77d1" emptyLabel="No mobility data yet." />
+                </section>
+              </div>
+
+              {/* Assigned Exercises & Plans */}
+              <section className="management-panel" style={{ marginTop: '1.5rem' }}>
+                <div className="panel-heading">
+                  <div>
+                    <span className="card-eyebrow">Prescriptions</span>
+                    <h3>Assigned exercises</h3>
+                  </div>
+                </div>
+                {detail.plans?.length ? (
+                  <div className="exercise-library-grid">
+                    {detail.plans.flatMap((plan) =>
+                      (plan.exercises || []).map((item, idx) => (
+                        <article className="library-item" key={item.exercise?._id || `${plan._id}-${idx}`}>
+                          <div className="library-item-top">
+                            <span className="exercise-category">{item.exercise?.category || 'Rehab'}</span>
+                            <span className="difficulty-tag">{item.exercise?.difficulty || 'Medium'}</span>
+                          </div>
+                          <h4>{item.exercise?.name || 'Assigned Exercise'}</h4>
+                          <p>{item.exercise?.description || plan.name}</p>
+                          <div className="exercise-meta">
+                            <span>{item.exercise?.targetBodyPart || 'Target area'}</span>
+                            <span>{item.frequency || 'Daily'}</span>
+                            {item.exercise?.duration && <span>{item.exercise.duration} min</span>}
+                          </div>
+                        </article>
+                      ))
+                    )}
+                  </div>
+                ) : (
+                  <p className="empty-state">No exercise plans currently assigned to this patient.</p>
+                )}
+              </section>
+
+              {/* Pain & Mobility Journal Tracking */}
+              <section className="management-panel" style={{ marginTop: '1.5rem' }}>
+                <div className="panel-heading">
+                  <div>
+                    <span className="card-eyebrow">Self-reported signals</span>
+                    <h3>Pain tracking & journal history</h3>
+                  </div>
+                  <span className="count-badge">{detail.painJournal?.length || 0} entries</span>
+                </div>
+                {detail.painJournal?.length ? (
+                  <div className="appointment-list">
+                    {detail.painJournal.slice().reverse().map((entry) => (
+                      <article className="appointment-row" key={entry._id}>
+                        <div className="appointment-date">
+                          <strong>{entry.dateString || formatDate(entry.date || entry.createdAt)}</strong>
+                          <span>Pain: {entry.painLevel}/10</span>
+                        </div>
+                        <div className="appointment-main">
+                          <strong>{entry.bodyPart} · Mobility: {entry.mobilityScore}/100</strong>
+                          <span>{entry.symptoms?.join(', ') || 'No specific symptoms noted'}</span>
+                          {entry.notes && <small>"{entry.notes}"</small>}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty-state">No pain tracking entries logged yet by this patient.</p>
+                )}
+              </section>
+
+              {/* Appointment History */}
+              <section className="management-panel" style={{ marginTop: '1.5rem' }}>
+                <div className="panel-heading">
+                  <div>
+                    <span className="card-eyebrow">Consultations</span>
+                    <h3>Appointment history</h3>
+                  </div>
+                  <span className="count-badge">{detail.appointments?.length || 0}</span>
+                </div>
+                {detail.appointments?.length ? (
+                  <div className="appointment-list">
+                    {detail.appointments.slice().reverse().map((appt) => (
+                      <article className="appointment-row" key={appt._id}>
+                        <div className="appointment-date">
+                          <strong>{formatDate(appt.appointmentDate)}</strong>
+                          <span>{appt.startTime} - {appt.endTime}</span>
+                        </div>
+                        <div className="appointment-main">
+                          <strong>{appt.type} · {appt.consultationMode}</strong>
+                          <small>{appt.notes || 'No visit notes'}</small>
+                        </div>
+                        <AppointmentStatus status={appt.status} />
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty-state">No appointments recorded for this patient.</p>
+                )}
+              </section>
+            </section>
+          ) : (
+            <div className="management-panel">
+              <p className="empty-state">Select a patient to view progress.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </main>
+  )
 }
 
 function AppointmentStatus({ status }) {

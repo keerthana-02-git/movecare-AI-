@@ -4,6 +4,7 @@ import {
   completePatientExercise,
   createExercise,
   deleteExercise,
+  getExerciseById,
   getPatientExercises,
   listAssignmentOptions,
   listExercises,
@@ -17,8 +18,9 @@ router.use(protect);
 router.get('/patient/assigned', authorize('Patient'), getPatientExercises);
 router.post('/patient/:exerciseId/complete', authorize('Patient'), completePatientExercise);
 router.get('/', authorize('Therapist'), listExercises);
-router.post('/', authorize('Therapist'), createExercise);
 router.get('/assignment-options', authorize('Therapist'), listAssignmentOptions);
+router.get('/:id', authorize('Therapist'), getExerciseById);
+router.post('/', authorize('Therapist'), createExercise);
 router.post('/assign', authorize('Therapist'), assignExercise);
 router.put('/:id', authorize('Therapist'), updateExercise);
 router.delete('/:id', authorize('Therapist'), deleteExercise);

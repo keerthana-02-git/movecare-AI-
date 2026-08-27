@@ -50,6 +50,19 @@ export const listExercises = async (req, res) => {
   }
 };
 
+export const getExerciseById = async (req, res) => {
+  try {
+    const therapist = await getTherapist(req.user);
+    if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
+
+    const exercise = await Exercise.findById(req.params.id);
+    if (!exercise) return res.status(404).json({ message: 'Exercise not found' });
+    res.json(exercise);
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to load exercise' });
+  }
+};
+
 export const createExercise = async (req, res) => {
   try {
     const therapist = await getTherapist(req.user);
@@ -115,9 +128,34 @@ export const listAssignmentOptions = async (req, res) => {
 
 export const assignExercise = async (req, res) => {
   try {
-    const { patientId, exerciseId, planName, startDate, endDate, frequency = 'Daily' } = req.body;
-    if (!patientId || !exerciseId || !planName || !startDate || !endDate) {
-      return res.status(400).json({ message: 'Patient, exercise, plan name, start date and end date are required' });
+    const {
+      patientId,
+      exerciseId,
+      exerciseIds,
+      exercises: rawExercisesList,
+      planName,
+      startDate,
+      endDate,
+      frequency = 'Daily',
+    } = req.body;
+
+    const idsToAssign = [];
+    if (Array.isArray(exerciseIds)) {
+      idsToAssign.push(...exerciseIds);
+    } else if (Array.isArray(exerciseId)) {
+      idsToAssign.push(...exerciseId);
+    } else if (Array.isArray(rawExercisesList)) {
+      idsToAssign.push(
+        ...rawExercisesList.map((item) =>
+          typeof item === 'object' ? (item.exerciseId || item.exercise || item._id) : item
+        )
+      );
+    } else if (exerciseId) {
+      idsToAssign.push(exerciseId);
+    }
+
+    if (!patientId || idsToAssign.length === 0 || !planName || !startDate || !endDate) {
+      return res.status(400).json({ message: 'Patient, exercise(s), plan name, start date and end date are required' });
     }
 
     if (new Date(endDate) <= new Date(startDate)) {
@@ -132,11 +170,14 @@ export const assignExercise = async (req, res) => {
     if (!patient) {
       patient = await Patient.findOne({ user: patientId });
     }
+    if (!patient) {
+      return res.status(404).json({ message: 'Patient not found' });
+    }
 
-    // Look up exercise from library
-    const exercise = await Exercise.findById(exerciseId);
-    if (!patient || !exercise) {
-      return res.status(404).json({ message: 'Patient or exercise not found' });
+    // Look up exercises from library
+    const matchedExercises = await Exercise.find({ _id: { $in: idsToAssign } });
+    if (matchedExercises.length === 0) {
+      return res.status(404).json({ message: 'No valid exercises found to assign' });
     }
 
     // Associate patient with therapist if unassigned
@@ -159,36 +200,48 @@ export const assignExercise = async (req, res) => {
       status: { $in: ['Active', 'Paused'] },
     });
 
+    const exerciseItems = [];
+    matchedExercises.forEach((ex, idx) => {
+      exerciseItems.push({
+        exercise: ex._id,
+        frequency,
+        order: idx + 1,
+      });
+    });
+
     if (plan) {
-      const alreadyHasEx = plan.exercises.some((e) => String(e.exercise) === String(exercise._id));
-      if (!alreadyHasEx) {
-        plan.exercises.push({
-          exercise: exercise._id,
-          frequency,
-          order: plan.exercises.length + 1,
-        });
-        if (new Date(endDate) > new Date(plan.endDate)) {
-          plan.endDate = new Date(endDate);
+      matchedExercises.forEach((ex) => {
+        const alreadyHasEx = plan.exercises.some((e) => String(e.exercise) === String(ex._id));
+        if (!alreadyHasEx) {
+          plan.exercises.push({
+            exercise: ex._id,
+            frequency,
+            order: plan.exercises.length + 1,
+          });
         }
-        await plan.save();
+      });
+      if (new Date(endDate) > new Date(plan.endDate)) {
+        plan.endDate = new Date(endDate);
       }
+      await plan.save();
     } else {
       plan = await ExercisePlan.create({
         patient: patient._id,
         therapist: therapist._id,
         name: planName.trim(),
-        exercises: [{ exercise: exercise._id, frequency, order: 1 }],
+        exercises: exerciseItems,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         status: 'Active',
       });
     }
 
+    const exerciseNames = matchedExercises.map((e) => e.name).join(', ');
     await createNotification({
       recipient: patient.user,
       type: 'NewExercisePlan',
       title: 'New exercise plan assigned',
-      message: `${exercise.name} was added to your ${planName} plan.`,
+      message: `${exerciseNames} assigned to your ${planName} plan.`,
       relatedEntity: { entityType: 'ExercisePlan', entityId: plan._id },
     });
 
