@@ -14,7 +14,7 @@ export const getAdminOverview = async (req, res) => {
   try {
     const [users, patients, therapists, exercises, appointments, stats, recentActivity] = await Promise.all([
       User.find()
-        .select('name email role isActive deactivatedAt createdAt')
+        .select('name email role isActive authProvider googleId deactivatedAt createdAt')
         .sort({ createdAt: -1 })
         .lean(),
       Patient.find()

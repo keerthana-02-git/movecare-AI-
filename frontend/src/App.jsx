@@ -32,6 +32,17 @@ import PainJournalPage from './components/journal/PainJournalPage'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 
+function getActiveUser(reactUser) {
+  try {
+    const saved = localStorage.getItem('movecare-user')
+    const parsed = saved ? JSON.parse(saved) : null
+    if (parsed) return parsed
+    return reactUser || null
+  } catch {
+    return reactUser || null
+  }
+}
+
 async function apiRequest(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
@@ -108,14 +119,7 @@ function Navbar({ user, onLogout }) {
   const navigate = useNavigate()
   const [unreadCount, setUnreadCount] = useState(0)
 
-  const activeUser = user || (() => {
-    try {
-      const saved = localStorage.getItem('movecare-user')
-      return saved ? JSON.parse(saved) : null
-    } catch {
-      return null
-    }
-  })()
+  const activeUser = getActiveUser(user)
 
   useEffect(() => {
     if (!activeUser) {
@@ -878,6 +882,10 @@ function GoogleCallbackPage({ onAuthComplete }) {
 
 function AuthPage({ mode, onAuthComplete }) {
   const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'Patient' })
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetPassword, setResetPassword] = useState('')
+  const [isResetMode, setIsResetMode] = useState(false)
+  const [successMsg, setSuccessMsg] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [searchParams] = useSearchParams()
@@ -885,13 +893,15 @@ function AuthPage({ mode, onAuthComplete }) {
 
   const isRegister = mode === 'register'
 
-  useEffect(() => {
-    const token = localStorage.getItem('movecare-token')
-    const savedUser = localStorage.getItem('movecare-user')
-    if (token && savedUser) {
-      navigate('/dashboard', { replace: true })
+  const alreadyLoggedInUser = (() => {
+    try {
+      const token = localStorage.getItem('movecare-token')
+      const saved = localStorage.getItem('movecare-user')
+      return token && saved ? JSON.parse(saved) : null
+    } catch {
+      return null
     }
-  }, [navigate])
+  })()
 
   useEffect(() => {
     const urlError = searchParams.get('error')
@@ -907,9 +917,51 @@ function AuthPage({ mode, onAuthComplete }) {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
+  const handlePasswordReset = async (event) => {
+    event.preventDefault()
+    setError('')
+    setSuccessMsg('')
+
+    const email = resetEmail.trim().toLowerCase()
+    const newPassword = resetPassword
+
+    if (!email || !newPassword) {
+      setError('Email and new password are required.')
+      return
+    }
+
+    if (newPassword.length < 6) {
+      setError('New password must be at least 6 characters long.')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, newPassword }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data.message || 'Password update failed')
+      }
+
+      setSuccessMsg(`Password for ${email} updated successfully! You can now log in below.`)
+      setFormData((prev) => ({ ...prev, email, password: '' }))
+      setIsResetMode(false)
+    } catch (err) {
+      setError(err.message || 'Password reset failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     setError('')
+    setSuccessMsg('')
 
     const name = formData.name.trim()
     const email = formData.email.trim().toLowerCase()
@@ -957,7 +1009,15 @@ function AuthPage({ mode, onAuthComplete }) {
       localStorage.setItem('movecare-token', data.token)
       localStorage.setItem('movecare-user', JSON.stringify(data.user))
       onAuthComplete(data.user)
-      navigate('/dashboard', { replace: true })
+
+      // Direct, role-verified navigation
+      if (data.user?.role === 'Therapist') {
+        navigate('/therapist-dashboard', { replace: true })
+      } else if (data.user?.role === 'Admin') {
+        navigate('/dashboard', { replace: true })
+      } else {
+        navigate('/dashboard', { replace: true })
+      }
     } catch (submittedError) {
       if (submittedError.name === 'TypeError' && (submittedError.message === 'Failed to fetch' || submittedError.message?.includes('fetch') || submittedError.message?.includes('NetworkError'))) {
         setError(`Unable to reach backend server at ${API_BASE_URL}. Please ensure the server is running on port 5000.`)
@@ -972,112 +1032,200 @@ function AuthPage({ mode, onAuthComplete }) {
   return (
     <main className="page-shell auth-page-pastel-bg">
       <div className="container auth-wrap">
-        <form className="auth-card auth-card-3d" onSubmit={handleSubmit}>
-          <div className="auth-3d-header">
-            <div className="auth-3d-badge-orb" aria-hidden="true">
-              🩺
+        {isResetMode ? (
+          <form className="auth-card auth-card-3d" onSubmit={handlePasswordReset}>
+            <div className="auth-3d-header">
+              <div className="auth-3d-badge-orb" aria-hidden="true">🔑</div>
+              <span className="eyebrow accent" style={{ letterSpacing: '0.08em', fontWeight: 700 }}>MoveCare AI</span>
+              <h2>Reset account password</h2>
+              <p className="auth-3d-subtitle">Update your password to access your clinical physical therapy portal</p>
             </div>
-            <span className="eyebrow accent" style={{ letterSpacing: '0.08em', fontWeight: 700 }}>MoveCare AI</span>
-            <h2>{isRegister ? 'Create your account' : 'Welcome back'}</h2>
-            <p className="auth-3d-subtitle">
-              {isRegister ? 'Personalized Clinical Rehabilitation Platform' : 'Sign in to access your prescribed physical therapy'}
+
+            <label>
+              Registered Email
+              <input
+                type="email"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+              />
+            </label>
+
+            <label>
+              New Password (min 6 characters)
+              <input
+                type="password"
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+              />
+            </label>
+
+            {error && <div className="form-error" role="alert">{error}</div>}
+
+            <button type="submit" className="primary-btn auth-button auth-button-3d" disabled={loading}>
+              {loading ? 'Updating password...' : 'Update Password'}
+            </button>
+
+            <p className="auth-link" style={{ marginTop: '1rem', textAlign: 'center' }}>
+              <button
+                type="button"
+                className="btn-link"
+                style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontWeight: 600 }}
+                onClick={() => { setIsResetMode(false); setError('') }}
+              >
+                &larr; Back to login
+              </button>
             </p>
-          </div>
+          </form>
+        ) : (
+          <form className="auth-card auth-card-3d" onSubmit={handleSubmit}>
+            <div className="auth-3d-header">
+              <div className="auth-3d-badge-orb" aria-hidden="true">
+                🩺
+              </div>
+              <span className="eyebrow accent" style={{ letterSpacing: '0.08em', fontWeight: 700 }}>MoveCare AI</span>
+              <h2>{isRegister ? 'Create your account' : 'Welcome back'}</h2>
+              <p className="auth-3d-subtitle">
+                {isRegister ? 'Personalized Clinical Rehabilitation Platform' : 'Sign in to access your prescribed physical therapy'}
+              </p>
+            </div>
 
-          {isRegister && (
-            <>
-              <label>
-                Full name
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder="Enter your name"
-                  required
-                />
-              </label>
-
-              <label>
-                Role / Account Type
-                <select
-                  name="role"
-                  value={formData.role}
-                  onChange={handleChange}
+            {alreadyLoggedInUser && !isRegister && (
+              <div style={{
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: '0.65rem',
+                padding: '0.75rem 1rem',
+                marginBottom: '1rem',
+                fontSize: '0.85rem',
+                color: '#166534',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '0.5rem'
+              }}>
+                <span>Signed in as <strong>{alreadyLoggedInUser.name}</strong> ({alreadyLoggedInUser.role})</span>
+                <NavLink
+                  to={alreadyLoggedInUser.role === 'Therapist' ? '/therapist-dashboard' : '/dashboard'}
+                  style={{ color: '#15803d', fontWeight: 700, textDecoration: 'underline', whiteSpace: 'nowrap' }}
                 >
-                  <option value="Patient">Patient</option>
-                  <option value="Therapist">Physical Therapist</option>
-                  <option value="Admin">Administrator</option>
-                </select>
-              </label>
-            </>
-          )}
+                  Dashboard &rarr;
+                </NavLink>
+              </div>
+            )}
 
-          <label>
-            Email
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="you@example.com"
+            {successMsg && (
+              <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '0.65rem', padding: '0.75rem 1rem', marginBottom: '1rem', color: '#15803d', fontSize: '0.88rem' }}>
+                {successMsg}
+              </div>
+            )}
+
+            {isRegister && (
+              <>
+                <label>
+                  Full name
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="Enter your name"
+                    required
+                  />
+                </label>
+
+                <label>
+                  Role / Account Type
+                  <select
+                    name="role"
+                    value={formData.role}
+                    onChange={handleChange}
+                  >
+                    <option value="Patient">Patient</option>
+                    <option value="Therapist">Physical Therapist</option>
+                    <option value="Admin">Administrator</option>
+                  </select>
+                </label>
+              </>
+            )}
+
+            <label>
+              Email
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="you@example.com"
+                required
+              />
+            </label>
+
+            <label>
+              Password
+              <input
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="••••••••"
+                required
+              />
+            </label>
+
+            {!isRegister && (
+              <div style={{ textAlign: 'right', marginTop: '-0.35rem', marginBottom: '0.75rem' }}>
+                <button
+                  type="button"
+                  style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.82rem', cursor: 'pointer', fontWeight: 600, padding: 0 }}
+                  onClick={() => { setIsResetMode(true); setResetEmail(formData.email); setError('') }}
+                >
+                  Forgot or need to update password?
+                </button>
+              </div>
+            )}
+
+            {error && <div className="form-error" role="alert">{error}</div>}
+
+            <button type="submit" className="primary-btn auth-button auth-button-3d" disabled={loading}>
+              {loading ? 'Please wait...' : isRegister ? 'Create account' : 'Login'}
+            </button>
+
+            <div className="auth-divider">
+              <span>or</span>
+            </div>
+
+            <GoogleAuthButton
+              onAuthComplete={onAuthComplete}
+              onError={(msg) => setError(msg)}
+              disabled={loading}
             />
-          </label>
 
-          <label>
-            Password
-            <input
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="••••••••"
-            />
-          </label>
-
-          {error && <div className="form-error" role="alert">{error}</div>}
-
-          <button type="submit" className="primary-btn auth-button auth-button-3d" disabled={loading}>
-            {loading ? 'Please wait...' : isRegister ? 'Create account' : 'Login'}
-          </button>
-
-          <div className="auth-divider">
-            <span>or</span>
-          </div>
-
-          <GoogleAuthButton
-            onAuthComplete={onAuthComplete}
-            onError={(msg) => setError(msg)}
-            disabled={loading}
-          />
-
-          <p className="auth-link">
-            {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
-            <NavLink to={isRegister ? '/login' : '/register'}>
-              {isRegister ? 'Login here' : 'Register here'}
-            </NavLink>
-          </p>
-        </form>
+            <p className="auth-link">
+              {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
+              <NavLink to={isRegister ? '/login' : '/register'}>
+                {isRegister ? 'Login here' : 'Register here'}
+              </NavLink>
+            </p>
+          </form>
+        )}
       </div>
     </main>
   )
 }
 
 function ProtectedRoute({ user, requiredRole }) {
-  const activeUser = user || (() => {
-    try {
-      const saved = localStorage.getItem('movecare-user')
-      return saved ? JSON.parse(saved) : null
-    } catch {
-      return null
-    }
-  })()
+  const activeUser = getActiveUser(user)
 
   if (!activeUser) {
     return <Navigate to="/login" replace />
   }
 
   if (requiredRole && activeUser.role !== requiredRole) {
+    if (activeUser.role === 'Therapist') return <Navigate to="/therapist-dashboard" replace />
     return <Navigate to="/dashboard" replace />
   }
 
@@ -5055,19 +5203,23 @@ function App() {
               path="/dashboard"
               element={
                 (() => {
-                  const activeUser = user || (() => {
-                    try {
-                      const saved = localStorage.getItem('movecare-user')
-                      return saved ? JSON.parse(saved) : null
-                    } catch {
-                      return null
-                    }
-                  })()
+                  const activeUser = getActiveUser(user)
 
                   if (!activeUser) return <Navigate to="/login" replace />
                   if (activeUser.role === 'Therapist') return <TherapistDashboardPage user={activeUser} />
                   if (activeUser.role === 'Admin') return <AdminDashboardPage user={activeUser} />
                   return <PatientDashboardPage user={activeUser} />
+                })()
+              }
+            />
+            <Route
+              path="/therapist-dashboard"
+              element={
+                (() => {
+                  const activeUser = getActiveUser(user)
+                  if (!activeUser) return <Navigate to="/login" replace />
+                  if (activeUser.role !== 'Therapist') return <Navigate to="/dashboard" replace />
+                  return <TherapistDashboardPage user={activeUser} />
                 })()
               }
             />
@@ -5079,9 +5231,9 @@ function App() {
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/progress" element={<PatientProgressPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/pain-journal" element={<PainJournalPage apiRequest={apiRequest} />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/ai-assistant" element={<AssistantPage />} /></Route>
-            <Route path="/monitoring" element={user?.role === 'Patient' ? <PatientMonitoringPage /> : <TherapistMonitoringPage />} />
-            <Route path="/notifications" element={<NotificationsPage user={user} />} />
-            <Route path="/consultation/:id" element={<ConsultationPage user={user} />} />
+            <Route path="/monitoring" element={getActiveUser(user)?.role === 'Patient' ? <PatientMonitoringPage /> : <TherapistMonitoringPage />} />
+            <Route path="/notifications" element={<NotificationsPage user={getActiveUser(user)} />} />
+            <Route path="/consultation/:id" element={<ConsultationPage user={getActiveUser(user)} />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

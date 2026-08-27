@@ -153,6 +153,50 @@ export const loginUser = async (req, res) => {
   }
 };
 
+export const resetPassword = async (req, res) => {
+  try {
+    const emailAddress = String(req.body.email || '').trim().toLowerCase();
+    const { newPassword } = req.body;
+
+    if (!emailAddress || !newPassword) {
+      return res.status(400).json({ message: 'Email and new password are required' });
+    }
+
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
+
+    const user = await User.findOne({ email: emailAddress }).select('+password');
+    if (!user) {
+      return res.status(404).json({ message: 'No account found with this email address' });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    await logAuditEvent({
+      action: 'USER_PASSWORD_RESET',
+      performedBy: user,
+      performedByRole: user.role,
+      targetEntity: { entityType: 'User', entityId: user._id },
+      details: { email: user.email, role: user.role },
+      req,
+    });
+
+    res.json({
+      message: 'Password updated successfully. You can now log in with your new password.',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Password update failed' });
+  }
+};
+
 export const exchangeGoogleCode = async (code, redirectUri) => {
   if (!code || typeof code !== 'string') return null;
 
