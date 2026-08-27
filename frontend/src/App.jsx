@@ -187,7 +187,15 @@ function Navbar({ user, onLogout }) {
               <NavLink to="/dashboard" className="secondary-btn small">
                 {activeUser.role === 'Admin' ? 'Admin console' : activeUser.role === 'Therapist' ? 'Therapist console' : 'Dashboard'}
               </NavLink>
-              {activeUser.role === 'Therapist' && <NavLink to="/exercise-management" className="secondary-btn small">Exercises</NavLink>}
+              {activeUser.role === 'Therapist' && (
+                <NavLink
+                  to="/exercise-management"
+                  className="primary-btn small"
+                  style={{ background: '#2563eb', color: '#ffffff', fontWeight: '700', border: 'none' }}
+                >
+                  Prescribe treatment
+                </NavLink>
+              )}
               {activeUser.role === 'Patient' && <NavLink to="/my-exercises" className="secondary-btn small">My exercises</NavLink>}
               {activeUser.role === 'Therapist' && <NavLink to="/therapist-appointments" className="secondary-btn small">Appointments</NavLink>}
               {activeUser.role === 'Patient' && <NavLink to="/appointments" className="secondary-btn small">Appointments</NavLink>}
@@ -1916,6 +1924,249 @@ function AdminDashboardPage({ user }) {
   )
 }
 
+function PrescribeTreatmentForm({ options, onAssigned, defaultPatientId = '' }) {
+  const todayStr = new Date().toISOString().split('T')[0]
+  const nextMonthStr = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
+
+  const [patientId, setPatientId] = useState(defaultPatientId)
+  const [exerciseId, setExerciseId] = useState('')
+  const [planName, setPlanName] = useState('')
+  const [frequency, setFrequency] = useState('Daily')
+  const [startDate, setStartDate] = useState(todayStr)
+  const [endDate, setEndDate] = useState(nextMonthStr)
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [successMsg, setSuccessMsg] = useState('')
+  const [errorMsg, setErrorMsg] = useState('')
+
+  useEffect(() => {
+    if (defaultPatientId) setPatientId(defaultPatientId)
+  }, [defaultPatientId])
+
+  const selectedPatient = options?.patients?.find((p) => p._id === patientId)
+  const selectedExercise = options?.exercises?.find((e) => e._id === exerciseId)
+
+  const handlePatientChange = (id) => {
+    setPatientId(id)
+    const p = options?.patients?.find((item) => item._id === id)
+    if (p && !planName) {
+      setPlanName(`${p.user?.name || 'Patient'} Rehab Protocol`)
+    }
+  }
+
+  const handleExerciseChange = (id) => {
+    setExerciseId(id)
+    const ex = options?.exercises?.find((item) => item._id === id)
+    if (ex) {
+      const p = options?.patients?.find((item) => item._id === patientId)
+      const pName = p?.user?.name ? `${p.user.name} - ` : ''
+      setPlanName(`${pName}${ex.name} Recovery Plan`)
+    }
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!patientId) {
+      setErrorMsg('Please select a patient to assign.')
+      return
+    }
+    if (!exerciseId) {
+      setErrorMsg('Please select a prescribed exercise/treatment.')
+      return
+    }
+
+    try {
+      setSaving(true)
+      setErrorMsg('')
+      setSuccessMsg('')
+
+      const payload = {
+        patientId,
+        exerciseId,
+        planName: planName.trim() || `${selectedExercise?.name || 'Rehab'} Treatment Plan`,
+        startDate,
+        endDate,
+        frequency,
+        notes: notes.trim(),
+      }
+
+      await apiRequest('/exercises/assign', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+
+      const assignedPatientName = selectedPatient?.user?.name || 'Patient'
+      const assignedExName = selectedExercise?.name || 'Exercise'
+
+      setSuccessMsg(`Treatment successfully prescribed! Assigned "${assignedExName}" to ${assignedPatientName}. The plan is now active in MongoDB.`)
+      setExerciseId('')
+      setPlanName('')
+      setNotes('')
+
+      if (onAssigned) await onAssigned()
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to prescribe treatment')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="prescribe-treatment-card">
+      <div className="prescribe-header">
+        <div>
+          <h3>🩺 Prescribe Treatment & Assign Patient</h3>
+          <p>Select any registered patient, prescribe their tailored therapy exercise, and click Assign. The patient immediately joins your care roster with an active prescription.</p>
+        </div>
+        <span className="treatment-badge-count">
+          {options?.patients?.length || 0} Patients Available
+        </span>
+      </div>
+
+      {successMsg && (
+        <div className="treatment-success-alert" role="alert">
+          <div>
+            <strong>✓ Success:</strong> {successMsg}
+          </div>
+          <button type="button" className="secondary-btn small" onClick={() => setSuccessMsg('')} style={{ padding: '0.2rem 0.5rem' }}>✕ Close</button>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="form-error" role="alert">{errorMsg}</div>
+      )}
+
+      <form onSubmit={handleSubmit}>
+        <div className="treatment-form-grid">
+          <div className="treatment-field-group">
+            <label htmlFor="select-patient-input">
+              1. Select Patient *
+              {selectedPatient?.medicalCondition && (
+                <span style={{ color: '#2563eb', fontSize: '0.8rem' }}>({selectedPatient.medicalCondition})</span>
+              )}
+            </label>
+            <select
+              id="select-patient-input"
+              value={patientId}
+              onChange={(e) => handlePatientChange(e.target.value)}
+              required
+            >
+              <option value="">-- Choose Patient ({options?.patients?.length || 0} registered) --</option>
+              {options?.patients?.map((p) => (
+                <option key={p._id} value={p._id}>
+                  {p.user?.name || 'Patient'} ({p.medicalCondition || 'General Rehab'} — {p.user?.email})
+                </option>
+              ))}
+            </select>
+            {selectedPatient && (
+              <div className="selected-patient-banner">
+                <span>👤 <strong>{selectedPatient.user?.name}</strong></span>
+                <span>· Condition: <strong>{selectedPatient.medicalCondition || 'General'}</strong></span>
+                <span>· Status: {selectedPatient.status}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="treatment-field-group">
+            <label htmlFor="select-exercise-input">
+              2. Prescribe Exercise / Treatment *
+            </label>
+            <select
+              id="select-exercise-input"
+              value={exerciseId}
+              onChange={(e) => handleExerciseChange(e.target.value)}
+              required
+            >
+              <option value="">-- Choose Treatment Exercise ({options?.exercises?.length || 0} available) --</option>
+              {options?.exercises?.map((ex) => (
+                <option key={ex._id} value={ex._id}>
+                  {ex.name} — {ex.targetBodyPart} ({ex.category}, {ex.duration} min, {ex.sets}×{ex.reps})
+                </option>
+              ))}
+            </select>
+            {selectedExercise && (
+              <div className="selected-patient-banner" style={{ background: '#eff6ff', borderColor: '#bfdbfe', color: '#1d4ed8' }}>
+                <span>🎯 <strong>{selectedExercise.name}</strong></span>
+                <span>· Target: {selectedExercise.targetBodyPart}</span>
+                <span>· Sets: {selectedExercise.sets} × {selectedExercise.reps} reps</span>
+              </div>
+            )}
+          </div>
+
+          <div className="treatment-field-group">
+            <label htmlFor="plan-name-input">3. Treatment Plan Name *</label>
+            <input
+              id="plan-name-input"
+              type="text"
+              value={planName}
+              onChange={(e) => setPlanName(e.target.value)}
+              placeholder="e.g. Knee ACL Recovery Protocol"
+              required
+            />
+          </div>
+
+          <div className="treatment-field-group">
+            <label htmlFor="frequency-input">4. Prescribed Frequency</label>
+            <select
+              id="frequency-input"
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value)}
+            >
+              <option value="Daily">Daily (Every Day)</option>
+              <option value="Every2Days">Every 2 Days</option>
+              <option value="EveryOtherDay">Every Other Day</option>
+              <option value="Twice">Twice a Week</option>
+              <option value="Weekly">Once a Week</option>
+            </select>
+          </div>
+
+          <div className="treatment-field-group">
+            <label htmlFor="start-date-input">5. Start Date</label>
+            <input
+              id="start-date-input"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="treatment-field-group">
+            <label htmlFor="end-date-input">6. Target Completion Date</label>
+            <input
+              id="end-date-input"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              required
+            />
+          </div>
+        </div>
+
+        <div className="treatment-field-group" style={{ marginBottom: '1.25rem' }}>
+          <label htmlFor="clinical-notes-input">7. Clinical Notes / Instructions for Patient (Optional)</label>
+          <input
+            id="clinical-notes-input"
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="e.g. Perform 2 sets in the morning and 1 in the evening. Report any pain above 4/10."
+          />
+        </div>
+
+        <button
+          type="submit"
+          className="primary-btn"
+          disabled={saving || !options?.patients?.length || !options?.exercises?.length}
+          style={{ width: '100%', padding: '0.9rem', fontSize: '1.05rem', fontWeight: '800' }}
+        >
+          {saving ? 'Prescribing and Assigning Plan in MongoDB...' : '✓ Confirm & Prescribe Treatment Plan'}
+        </button>
+      </form>
+    </section>
+  )
+}
+
 function TherapistDashboardPage({ user }) {
   const [data, setData] = useState(null)
   const [selectedId, setSelectedId] = useState('')
@@ -1970,6 +2221,52 @@ function TherapistDashboardPage({ user }) {
       <ProgressMetric label="Library exercises" value={data.options.exercises.length} />
       <ProgressMetric label="Average adherence" value={averageAdherence} suffix="%" />
     </div>
+
+    {/* Dedicated Prescribe Treatment Card Right on Dashboard */}
+    <PrescribeTreatmentForm
+      options={data.options}
+      onAssigned={loadDashboard}
+      defaultPatientId={selectedId}
+    />
+
+    {/* Active Treatment Plans List if any exist */}
+    {data.options?.assignedPlans?.length > 0 && (
+      <section className="management-panel assigned-plans-section" style={{ marginBottom: '1.5rem' }}>
+        <div className="panel-heading">
+          <div>
+            <span className="card-eyebrow">Active Prescriptions</span>
+            <h3>Assigned Treatment Plans ({data.options.assignedPlans.length})</h3>
+          </div>
+          <NavLink className="secondary-btn small" to="/exercise-management">Full exercise management</NavLink>
+        </div>
+        <div className="assigned-plans-table-wrap">
+          <table className="assigned-plans-table">
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Treatment Plan</th>
+                <th>Prescribed Exercises</th>
+                <th>Frequency</th>
+                <th>Valid Period</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.options.assignedPlans.map((plan) => (
+                <tr key={plan._id}>
+                  <td><strong>{plan.patient?.user?.name || 'Patient'}</strong><br /><small>{plan.patient?.medicalCondition || ''}</small></td>
+                  <td><strong>{plan.name}</strong></td>
+                  <td>{(plan.exercises || []).map((e) => e.exercise?.name).filter(Boolean).join(', ') || 'Prescribed Exercises'}</td>
+                  <td>{plan.exercises?.[0]?.frequency || 'Daily'}</td>
+                  <td>{formatDate(plan.startDate)} - {formatDate(plan.endDate)}</td>
+                  <td><span className="status-active-pill">{plan.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    )}
     {data.notifications.length > 0 && (
       <section className="management-panel" style={{ marginBottom: '1.5rem' }}>
         <div className="panel-heading">
@@ -3134,20 +3431,9 @@ function ExerciseForm({ form, setForm, onSubmit, editing, onCancel, loading }) {
 }
 
 function ExerciseManagementPage() {
-  const todayDateStr = new Date().toISOString().split('T')[0]
-  const thirtyDaysLaterStr = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
-
   const [exercises, setExercises] = useState([])
   const [options, setOptions] = useState({ patients: [], exercises: [] })
   const [form, setForm] = useState(emptyExercise)
-  const [assignment, setAssignment] = useState({
-    patientId: '',
-    exerciseId: '',
-    planName: '',
-    startDate: todayDateStr,
-    endDate: thirtyDaysLaterStr,
-    frequency: 'Daily',
-  })
   const [editingId, setEditingId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -3209,29 +3495,6 @@ function ExerciseManagementPage() {
     }
   }
 
-  const handleAssignment = async (event) => {
-    event.preventDefault()
-    try {
-      setSaving(true)
-      setError('')
-      setNotice('')
-      await apiRequest('/exercises/assign', { method: 'POST', body: JSON.stringify(assignment) })
-      setAssignment({
-        patientId: '',
-        exerciseId: '',
-        planName: '',
-        startDate: todayDateStr,
-        endDate: thirtyDaysLaterStr,
-        frequency: 'Daily',
-      })
-      setNotice('Exercise assigned to the patient successfully.')
-      await loadData()
-    } catch (assignmentError) {
-      setError(assignmentError.message)
-    } finally {
-      setSaving(false)
-    }
-  }
 
   return (
     <main className="page-shell">
@@ -3245,9 +3508,50 @@ function ExerciseManagementPage() {
         </div>
         {error && <div className="form-error" role="alert">{error}</div>}
         {notice && <div className="success-message" role="status">{notice}</div>}
+        {/* Prescribe Treatment Card */}
+        <PrescribeTreatmentForm options={options} onAssigned={loadData} />
+
+        {/* Active Prescriptions Table */}
+        {options.assignedPlans?.length > 0 && (
+          <section className="management-panel assigned-plans-section" style={{ marginBottom: '2rem' }}>
+            <div className="panel-heading">
+              <div>
+                <span className="card-eyebrow">Active Prescriptions</span>
+                <h3>Assigned Treatment Plans ({options.assignedPlans.length})</h3>
+              </div>
+            </div>
+            <div className="assigned-plans-table-wrap">
+              <table className="assigned-plans-table">
+                <thead>
+                  <tr>
+                    <th>Patient</th>
+                    <th>Treatment Plan</th>
+                    <th>Prescribed Exercises</th>
+                    <th>Frequency</th>
+                    <th>Valid Period</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {options.assignedPlans.map((plan) => (
+                    <tr key={plan._id}>
+                      <td><strong>{plan.patient?.user?.name || 'Patient'}</strong><br /><small>{plan.patient?.medicalCondition || ''}</small></td>
+                      <td><strong>{plan.name}</strong></td>
+                      <td>{(plan.exercises || []).map((e) => e.exercise?.name).filter(Boolean).join(', ') || 'Prescribed Exercises'}</td>
+                      <td>{plan.exercises?.[0]?.frequency || 'Daily'}</td>
+                      <td>{formatDate(plan.startDate)} - {formatDate(plan.endDate)}</td>
+                      <td><span className="status-active-pill">{plan.status}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
         <div className="management-layout">
           <section className="management-panel">
-            <h3>{editingId ? 'Edit exercise' : 'Create exercise'}</h3>
+            <h3>{editingId ? 'Edit exercise in library' : 'Create new exercise for library'}</h3>
             <ExerciseForm
               form={form}
               setForm={setForm}
@@ -3259,86 +3563,6 @@ function ExerciseManagementPage() {
               }}
               loading={saving}
             />
-          </section>
-          <section className="management-panel">
-            <h3>Assign an exercise</h3>
-            <form className="assignment-form" onSubmit={handleAssignment}>
-              <label>
-                Patient
-                <select
-                  value={assignment.patientId}
-                  onChange={(event) => setAssignment({ ...assignment, patientId: event.target.value })}
-                  required
-                >
-                  <option value="">Select patient</option>
-                  {options.patients.map((patient) => (
-                    <option key={patient._id} value={patient._id}>
-                      {patient.user?.name || patient.user?.email || 'Patient'}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Exercise
-                <select
-                  value={assignment.exerciseId}
-                  onChange={(event) => setAssignment({ ...assignment, exerciseId: event.target.value })}
-                  required
-                >
-                  <option value="">Select exercise</option>
-                  {options.exercises.map((exercise) => (
-                    <option key={exercise._id} value={exercise._id}>
-                      {exercise.name} ({exercise.targetBodyPart})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Plan name
-                <input
-                  value={assignment.planName}
-                  onChange={(event) => setAssignment({ ...assignment, planName: event.target.value })}
-                  placeholder="e.g. Knee recovery week 1"
-                  required
-                />
-              </label>
-              <div className="form-grid">
-                <label>
-                  Start date
-                  <input
-                    type="date"
-                    value={assignment.startDate}
-                    onChange={(event) => setAssignment({ ...assignment, startDate: event.target.value })}
-                    required
-                  />
-                </label>
-                <label>
-                  End date
-                  <input
-                    type="date"
-                    value={assignment.endDate}
-                    onChange={(event) => setAssignment({ ...assignment, endDate: event.target.value })}
-                    required
-                  />
-                </label>
-              </div>
-              <label>
-                Frequency
-                <select
-                  value={assignment.frequency}
-                  onChange={(event) => setAssignment({ ...assignment, frequency: event.target.value })}
-                >
-                  <option value="Daily">Daily</option>
-                  <option value="Every2Days">Every 2 days</option>
-                  <option value="EveryOtherDay">Every other day</option>
-                  <option value="Twice">Twice a week</option>
-                  <option value="Weekly">Weekly</option>
-                </select>
-              </label>
-              <button className="primary-btn" disabled={saving || !options.patients.length}>
-                {saving ? 'Assigning...' : 'Assign exercise'}
-              </button>
-            </form>
           </section>
         </div>
         <section className="management-panel exercise-library">

@@ -143,7 +143,7 @@ export const listAssignmentOptions = async (req, res) => {
     const therapist = await getTherapist(req.user);
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
 
-    const [patients, exercises] = await Promise.all([
+    const [patients, exercises, assignedPlans] = await Promise.all([
       Patient.find({})
         .populate('user', 'name email')
         .sort({ createdAt: -1 })
@@ -151,8 +151,13 @@ export const listAssignmentOptions = async (req, res) => {
       Exercise.find({})
         .sort({ name: 1 })
         .lean(),
+      ExercisePlan.find({ therapist: therapist._id })
+        .sort({ createdAt: -1 })
+        .populate({ path: 'patient', populate: { path: 'user', select: 'name email' } })
+        .populate('exercises.exercise')
+        .lean(),
     ]);
-    res.json({ patients, exercises });
+    res.json({ patients, exercises, assignedPlans: assignedPlans || [] });
   } catch (error) {
     res.status(500).json({ message: 'Unable to load assignment options' });
   }
@@ -169,6 +174,7 @@ export const assignExercise = async (req, res) => {
       startDate,
       endDate,
       frequency = 'Daily',
+      notes = '',
     } = req.body;
 
     const idsToAssign = [];
@@ -186,12 +192,8 @@ export const assignExercise = async (req, res) => {
       idsToAssign.push(exerciseId);
     }
 
-    if (!patientId || idsToAssign.length === 0 || !planName || !startDate || !endDate) {
-      return res.status(400).json({ message: 'Patient, exercise(s), plan name, start date and end date are required' });
-    }
-
-    if (new Date(endDate) <= new Date(startDate)) {
-      return res.status(400).json({ message: 'End date must be after start date' });
+    if (!patientId || idsToAssign.length === 0) {
+      return res.status(400).json({ message: 'Patient and at least one exercise are required' });
     }
 
     const therapist = await getTherapist(req.user);
@@ -212,6 +214,13 @@ export const assignExercise = async (req, res) => {
       return res.status(404).json({ message: 'No valid exercises found to assign' });
     }
 
+    const resolvedPlanName = (planName && planName.trim()) || `${matchedExercises[0]?.name || 'Rehabilitation'} Treatment Plan`;
+    const resolvedStartDate = startDate ? new Date(startDate) : new Date();
+    let resolvedEndDate = endDate ? new Date(endDate) : new Date(Date.now() + 30 * 86400000);
+    if (resolvedEndDate <= resolvedStartDate) {
+      resolvedEndDate = new Date(resolvedStartDate.getTime() + 30 * 86400000);
+    }
+
     // Associate patient with therapist if unassigned
     if (!patient.assignedTherapist || String(patient.assignedTherapist) !== String(therapist._id)) {
       patient.assignedTherapist = therapist._id;
@@ -228,7 +237,7 @@ export const assignExercise = async (req, res) => {
     // Check if an active plan with the same name already exists for this patient
     let plan = await ExercisePlan.findOne({
       patient: patient._id,
-      name: planName.trim(),
+      name: resolvedPlanName,
       status: { $in: ['Active', 'Paused'] },
     });
 
@@ -252,18 +261,23 @@ export const assignExercise = async (req, res) => {
           });
         }
       });
-      if (new Date(endDate) > new Date(plan.endDate)) {
-        plan.endDate = new Date(endDate);
+      if (resolvedEndDate > new Date(plan.endDate)) {
+        plan.endDate = resolvedEndDate;
+      }
+      if (notes) {
+        plan.notes = notes;
       }
       await plan.save();
     } else {
       plan = await ExercisePlan.create({
         patient: patient._id,
         therapist: therapist._id,
-        name: planName.trim(),
+        name: resolvedPlanName,
         exercises: exerciseItems,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
+        startDate: resolvedStartDate,
+        endDate: resolvedEndDate,
+        goals: notes || 'Complete rehabilitation exercises as prescribed',
+        notes: notes || '',
         status: 'Active',
       });
     }
