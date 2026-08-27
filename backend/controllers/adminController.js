@@ -33,8 +33,8 @@ export const getAdminOverview = async (req, res) => {
       Appointment.find()
         .populate({ path: 'patient', populate: { path: 'user', select: 'name email' } })
         .populate({ path: 'therapist', populate: { path: 'user', select: 'name email' } })
-        .sort({ appointmentDate: -1, startTime: -1 })
-        .limit(50)
+        .sort({ createdAt: -1 })
+        .limit(100)
         .lean(),
       Promise.all([
         User.countDocuments(),
@@ -106,7 +106,7 @@ export const updateUserRole = async (req, res) => {
     const user = await User.findByIdAndUpdate(
       req.params.id,
       { role },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     ).select('name email role isActive deactivatedAt createdAt');
     if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -218,7 +218,7 @@ export const updateTherapistStatus = async (req, res) => {
     const therapist = await Therapist.findByIdAndUpdate(
       req.params.id,
       { status },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     ).populate('user', 'name email role');
     if (!therapist) return res.status(404).json({ message: 'Therapist not found' });
 

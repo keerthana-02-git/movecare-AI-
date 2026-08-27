@@ -93,7 +93,7 @@ export const updateExercise = async (req, res) => {
     const exercise = await Exercise.findOneAndUpdate(
       { _id: req.params.id, createdBy: therapist?._id },
       pickExerciseFields(req.body),
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     );
     if (!exercise) return res.status(404).json({ message: 'Exercise not found' });
 

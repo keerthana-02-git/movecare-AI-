@@ -4748,6 +4748,8 @@ function App() {
   }
 
   const handleLogout = () => {
+    localStorage.removeItem('movecare-token')
+    localStorage.removeItem('movecare-user')
     setUser(null)
   }
 

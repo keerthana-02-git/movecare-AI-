@@ -71,7 +71,7 @@ export const updatePatientSession = async (req, res) => {
     const session = await MonitoringSession.findOneAndUpdate(
       { _id: req.params.id, patient: patient?._id, status: { $in: ['Active', 'Paused'] } },
       update,
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     );
     if (!session) return res.status(404).json({ message: 'Active monitoring session not found' });
 
