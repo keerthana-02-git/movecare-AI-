@@ -305,6 +305,8 @@ export const purgeJunkTestData = async (req, res) => {
       'prarth12@gmail.com',
       'kiruthikad03@gmail.com',
       'keerthana.r.cse.2024@snsce.ac.in',
+      'sana@movecare.io',
+      'rahi@movecare.io',
       'marcus.chen@movecare.io',
       'sarah.jenkins@movecare.io',
       'david.miller@movecare.io',
