@@ -23,7 +23,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: #f7fafc;
+  background: #f8fafc url('/website-bg.jpg') center top / cover no-repeat fixed;
   overflow-x: hidden;
 }
 
