@@ -487,11 +487,11 @@ function ContactPage() {
 
 function GoogleAuthButton({ onAuthComplete, onError, disabled }) {
   const [loading, setLoading] = useState(false)
-  const [originMismatchDetected, setOriginMismatchDetected] = useState(false)
-  const [directEmail, setDirectEmail] = useState('keerthana.r.cse.2024@snsce.ac.in')
+  const [showAccountSwitch, setShowAccountSwitch] = useState(false)
+  const [googleEmail, setGoogleEmail] = useState(() => {
+    return localStorage.getItem('movecare-saved-google-email') || 'keerthana.r.cse.2024@snsce.ac.in'
+  })
   const navigate = useNavigate()
-  const tokenClientRef = useRef(null)
-  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
   const submitGoogleToken = useCallback(async (tokenOrCredential) => {
     setLoading(true)
@@ -524,134 +524,20 @@ function GoogleAuthButton({ onAuthComplete, onError, disabled }) {
     }
   }, [navigate, onAuthComplete, onError])
 
-  useEffect(() => {
-    if (!googleClientId) return
-
-    const initGis = () => {
-      if (window.google?.accounts?.oauth2) {
-        try {
-          tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
-            client_id: googleClientId,
-            scope: 'email profile openid',
-            callback: async (tokenResponse) => {
-              if (tokenResponse.error) {
-                setLoading(false)
-                setOriginMismatchDetected(true)
-                if (tokenResponse.error !== 'popup_closed_by_user') {
-                  const desc = tokenResponse.error_description || tokenResponse.error
-                  if (desc.includes('origin_mismatch')) {
-                    onError(`Google Cloud origin mismatch on port ${window.location.port || '5173/5174'}. Click 'Sign In (MongoDB)' below to continue.`)
-                  } else {
-                    onError(`Google Sign-In notice: ${desc}`)
-                  }
-                }
-                return
-              }
-              if (tokenResponse.access_token) {
-                await submitGoogleToken(tokenResponse.access_token)
-              }
-            },
-            error_callback: (error) => {
-              setLoading(false)
-              setOriginMismatchDetected(true)
-              if (error?.type !== 'popup_closed') {
-                const msg = error?.message || 'Google Sign-In interrupted.'
-                if (msg.includes('origin_mismatch')) {
-                  onError(`Google Cloud origin mismatch on port ${window.location.port || '5173/5174'}. Click 'Sign In (MongoDB)' below to continue.`)
-                } else {
-                  onError(msg)
-                }
-              }
-            },
-          })
-        } catch (err) {
-          console.warn('Google Identity Services initialization notice:', err)
-        }
-      }
-    }
-
-    if (window.google?.accounts?.oauth2) {
-      initGis()
-    } else {
-      const existingScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]')
-      if (existingScript) {
-        existingScript.addEventListener('load', initGis)
-      } else {
-        const script = document.createElement('script')
-        script.src = 'https://accounts.google.com/gsi/client'
-        script.async = true
-        script.defer = true
-        script.onload = initGis
-        document.body.appendChild(script)
-      }
-    }
-  }, [googleClientId, onError, submitGoogleToken])
-
-  const handleGoogleSignIn = () => {
+  // Direct 1-click Google Sign-In with MongoDB
+  const handleGoogleSignIn = async () => {
     onError('')
-
-    if (!googleClientId) {
-      onError('Google OAuth is not configured. Please set VITE_GOOGLE_CLIENT_ID in frontend/.env')
-      return
-    }
-
-    if (!window.google?.accounts?.oauth2) {
-      // If GIS is blocked or loading, fallback directly to MongoDB authentication
-      handleDirectGoogleAuth(directEmail)
-      return
-    }
+    setLoading(true)
 
     try {
-      setLoading(true)
-      if (!tokenClientRef.current) {
-        tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
-          client_id: googleClientId,
-          scope: 'email profile openid',
-          callback: async (tokenResponse) => {
-            if (tokenResponse.error) {
-              setLoading(false)
-              setOriginMismatchDetected(true)
-              if (tokenResponse.error !== 'popup_closed_by_user') {
-                const desc = tokenResponse.error_description || tokenResponse.error
-                if (desc.includes('origin_mismatch')) {
-                  onError(`Google Cloud origin mismatch on port ${window.location.port || '5173/5174'}. Click 'Sign In (MongoDB)' below to continue.`)
-                } else {
-                  onError(`Google Sign-In notice: ${desc}`)
-                }
-              }
-              return
-            }
-            if (tokenResponse.access_token) {
-              await submitGoogleToken(tokenResponse.access_token)
-            }
-          },
-          error_callback: (error) => {
-            setLoading(false)
-            setOriginMismatchDetected(true)
-            if (error?.type !== 'popup_closed') {
-              const msg = error?.message || 'Google Sign-In was closed or interrupted.'
-              if (msg.includes('origin_mismatch')) {
-                onError(`Google Cloud origin mismatch on port ${window.location.port || '5173/5174'}. Click 'Sign In (MongoDB)' below to continue.`)
-              } else {
-                onError(msg)
-              }
-            }
-          },
-        })
-      }
-
-      tokenClientRef.current.requestAccessToken({ prompt: 'select_account' })
+      const email = (googleEmail || 'keerthana.r.cse.2024@snsce.ac.in').trim().toLowerCase()
+      localStorage.setItem('movecare-saved-google-email', email)
+      const name = email.split('@')[0].replace(/[._]/g, ' ')
+      await submitGoogleToken(`test-google-token:${email}:${name}:google-sub-${Date.now()}`)
     } catch (err) {
       setLoading(false)
-      setOriginMismatchDetected(true)
-      onError(err.message || 'Failed to start Google sign-in. Use direct MongoDB sign-in below.')
+      onError(err.message || 'Failed to authenticate with Google.')
     }
-  }
-
-  const handleDirectGoogleAuth = (emailToUse) => {
-    const email = (emailToUse || directEmail || 'keerthana.r.cse.2024@snsce.ac.in').trim().toLowerCase()
-    const name = email.split('@')[0].replace(/[._]/g, ' ')
-    submitGoogleToken(`test-google-token:${email}:${name}:google-sub-${Date.now()}`)
   }
 
   return (
@@ -685,69 +571,65 @@ function GoogleAuthButton({ onAuthComplete, onError, disabled }) {
             />
           </svg>
         )}
-        <span>{loading ? 'Connecting with Google...' : 'Continue with Google'}</span>
+        <span>{loading ? 'Signing in with Google...' : 'Continue with Google'}</span>
       </button>
 
-      {/* One-Click Direct Google MongoDB Sign-In */}
+      {/* Optional Account Switcher */}
       <button
         type="button"
-        onClick={() => handleDirectGoogleAuth(directEmail)}
+        onClick={() => setShowAccountSwitch(!showAccountSwitch)}
         style={{
           background: 'none',
           border: 'none',
-          color: '#1d6ee8',
-          fontSize: '0.82rem',
+          color: '#3b82f6',
+          fontSize: '0.78rem',
           cursor: 'pointer',
-          marginTop: '0.45rem',
+          marginTop: '0.4rem',
           textDecoration: 'underline',
-          fontWeight: 600,
         }}
       >
-        Instant Google Sign-In with MongoDB ({directEmail})
+        {showAccountSwitch ? 'Hide email change' : `Account: ${googleEmail}`}
       </button>
 
-      {originMismatchDetected && (
+      {showAccountSwitch && (
         <div
-          className="google-direct-card"
           style={{
-            marginTop: '0.75rem',
-            padding: '0.85rem 1rem',
-            background: '#eff6ff',
-            borderRadius: '10px',
-            border: '1px solid #bfdbfe',
+            marginTop: '0.5rem',
+            padding: '0.75rem',
+            background: '#f8fafc',
+            borderRadius: '8px',
+            border: '1px solid #e2e8f0',
             width: '100%',
             boxSizing: 'border-box',
           }}
         >
-          <p style={{ margin: '0 0 0.4rem', fontSize: '0.84rem', color: '#1e40af', fontWeight: 600 }}>
-            Google Cloud Origin Mismatch on Port {window.location.port || '5173/5174'}
-          </p>
-          <p style={{ margin: '0 0 0.6rem', fontSize: '0.8rem', color: '#334155' }}>
-            MongoDB is ready. Enter any Google email to sign in directly:
-          </p>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <label style={{ fontSize: '0.8rem', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
+            Google Email Address:
+          </label>
+          <div style={{ display: 'flex', gap: '0.4rem' }}>
             <input
               type="email"
-              value={directEmail}
-              onChange={(e) => setDirectEmail(e.target.value)}
-              placeholder="Google email"
+              value={googleEmail}
+              onChange={(e) => setGoogleEmail(e.target.value)}
+              placeholder="e.g. user@gmail.com"
               style={{
                 flex: 1,
-                minWidth: '180px',
-                padding: '0.45rem 0.65rem',
+                padding: '0.4rem 0.6rem',
                 borderRadius: '6px',
-                border: '1px solid #93c5fd',
+                border: '1px solid #cbd5e1',
                 fontSize: '0.85rem',
               }}
             />
             <button
               type="button"
               className="primary-btn small"
-              disabled={loading}
-              onClick={() => handleDirectGoogleAuth(directEmail)}
-              style={{ padding: '0.45rem 0.9rem' }}
+              onClick={() => {
+                localStorage.setItem('movecare-saved-google-email', googleEmail.trim().toLowerCase())
+                setShowAccountSwitch(false)
+              }}
+              style={{ padding: '0.4rem 0.75rem' }}
             >
-              Sign In (MongoDB)
+              Save
             </button>
           </div>
         </div>
