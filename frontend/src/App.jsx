@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   BrowserRouter,
   Navigate,
@@ -417,7 +417,7 @@ function GoogleAuthButton({ onAuthComplete, onError, disabled }) {
   const tokenClientRef = useRef(null)
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
-  const submitGoogleToken = async (tokenOrCredential) => {
+  const submitGoogleToken = useCallback(async (tokenOrCredential) => {
     setLoading(true)
     onError('')
 
@@ -446,7 +446,7 @@ function GoogleAuthButton({ onAuthComplete, onError, disabled }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [navigate, onAuthComplete, onError])
 
   useEffect(() => {
     if (!googleClientId) return
@@ -507,7 +507,7 @@ function GoogleAuthButton({ onAuthComplete, onError, disabled }) {
         document.body.appendChild(script)
       }
     }
-  }, [googleClientId])
+  }, [googleClientId, onError, submitGoogleToken])
 
   const handleGoogleSignIn = () => {
     onError('')

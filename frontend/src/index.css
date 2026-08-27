@@ -16,6 +16,7 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
 }
 
 body {
@@ -23,6 +24,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background: #f7fafc;
+  overflow-x: hidden;
 }
 
 button,
