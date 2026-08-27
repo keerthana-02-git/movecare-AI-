@@ -18,32 +18,68 @@ function getClinicalYouTubeFallback(name = '', bodyPart = '') {
   const n = String(name || '').toLowerCase()
   const b = String(bodyPart || '').toLowerCase()
 
-  if (n.includes('knee extension') || n.includes('tke') || n.includes('terminal')) {
-    return 'https://www.youtube-nocookie.com/embed/kYJmQn-3h34'
+  // Seated Leg Raise / Knee Extension / Long Arc Quad
+  if ((n.includes('seated') && n.includes('leg')) || n.includes('seated knee') || n.includes('long arc')) {
+    return 'https://www.youtube-nocookie.com/embed/CWVEVBOGNE8' // Ask Doctor Jo - Seated Leg Exercises
   }
-  if (n.includes('quad') || n.includes('quadriceps')) {
-    return 'https://www.youtube-nocookie.com/embed/au62CidApd0'
+
+  // Straight Leg Raise
+  if (n.includes('leg raise') || n.includes('straight leg') || n.includes('slr')) {
+    return 'https://www.youtube-nocookie.com/embed/Ka19yzAlIGY' // Ask Doctor Jo - Straight Leg Raise
   }
+
+  // Knee Extensions / TKE / Quad Sets
+  if (n.includes('quad') || n.includes('quadriceps') || n.includes('terminal') || n.includes('tke') || b.includes('knee')) {
+    return 'https://www.youtube-nocookie.com/embed/au62CidApd0' // Ask Doctor Jo - Quad Sets
+  }
+
+  // Heel Slides / Hamstring
   if (n.includes('hamstring') || n.includes('curl') || n.includes('heel slide')) {
-    return 'https://www.youtube-nocookie.com/embed/Kz62CidApd0'
+    return 'https://www.youtube-nocookie.com/embed/qdxGglzCr1I' // Knee Relief & Range of Motion
   }
+
+  // Neck / Cervical / Chin Tuck
   if (n.includes('chin tuck') || n.includes('cervical') || b.includes('neck')) {
-    return 'https://www.youtube-nocookie.com/embed/Xm8oB0bJzP0'
+    return 'https://www.youtube-nocookie.com/embed/QQMfNNHcf8w' // Ask Doctor Jo - Chin Tucks
   }
-  if (n.includes('scapular') || n.includes('wall slide') || n.includes('raise') || b.includes('shoulder')) {
-    return 'https://www.youtube-nocookie.com/embed/4y_v1tE4i4w'
+
+  // Shoulder / Wall Slide
+  if (n.includes('wall slide') || n.includes('scapular') || n.includes('wall')) {
+    return 'https://www.youtube-nocookie.com/embed/D351y9ecIwc' // MGH - Wall Slide Exercise
   }
+
+  // Shoulder / Pendulum / Arm
+  if (n.includes('pendulum') || b.includes('shoulder') || n.includes('arm')) {
+    return 'https://www.youtube-nocookie.com/embed/QF_ubbr_RUE' // Ask Doctor Jo - Codman Pendulum
+  }
+
+  // Back / Lumbar / Glute Bridge / Pelvic
   if (n.includes('bridge') || n.includes('pelvic') || n.includes('cat') || b.includes('back') || b.includes('lumbar')) {
-    return 'https://www.youtube-nocookie.com/embed/wPM8icPu6H8'
+    return 'https://www.youtube-nocookie.com/embed/wPM8icPu6H8' // Well+Good - Glute Bridge
   }
-  if (b.includes('knee')) {
-    return 'https://www.youtube-nocookie.com/embed/kYJmQn-3h34'
+
+  // Core / Bird Dog
+  if (n.includes('bird dog') || n.includes('core') || n.includes('abdominal')) {
+    return 'https://www.youtube-nocookie.com/embed/wiFNA3sqjCA' // Howcast - Bird Dog Exercise
   }
-  return 'https://www.youtube-nocookie.com/embed/au62CidApd0'
+
+  return 'https://www.youtube-nocookie.com/embed/CWVEVBOGNE8'
 }
 
 function resolveVideoEmbed(videoUrl, exerciseName, targetBodyPart) {
-  if (!videoUrl || typeof videoUrl !== 'string' || !videoUrl.trim() || videoUrl.includes('example.com')) {
+  if (
+    !videoUrl ||
+    typeof videoUrl !== 'string' ||
+    !videoUrl.trim() ||
+    videoUrl.includes('example.com') ||
+    videoUrl.includes('mock-') ||
+    videoUrl.includes('4y_v1tE4i4w') ||
+    videoUrl.includes('Xm8oB0bJzP0') ||
+    videoUrl.includes('kYJmQn-3h34') ||
+    videoUrl.includes('y3uVjJzB90E') ||
+    videoUrl.includes('F3QfT08gR9Q') ||
+    videoUrl.includes('W5_gJ3o_Y2I')
+  ) {
     return {
       type: 'youtube',
       src: getClinicalYouTubeFallback(exerciseName, targetBodyPart),
@@ -63,7 +99,7 @@ function resolveVideoEmbed(videoUrl, exerciseName, targetBodyPart) {
   }
 
   if (url.includes('youtube.com/embed/')) {
-    return { type: 'youtube', src: url }
+    return { type: 'youtube', src: url.replace('youtube.com/embed/', 'youtube-nocookie.com/embed/') }
   }
 
   if (url.includes('vimeo.com/')) {
@@ -168,7 +204,7 @@ export default function ExerciseDetailModal({
         >
           <iframe
             src={`${embed.src}?rel=0&modestbranding=1&autoplay=0`}
-            title={`${ex.name} Video Demonstration`}
+            title={`${ex.name || 'Exercise'} Video Demonstration`}
             style={{
               position: 'absolute',
               top: 0,
@@ -178,7 +214,8 @@ export default function ExerciseDetailModal({
               border: 0,
               borderRadius: '0.85rem',
             }}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerPolicy="strict-origin-when-cross-origin"
             allowFullScreen
           />
         </div>

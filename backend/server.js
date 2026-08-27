@@ -14,6 +14,7 @@ import monitoringRoutes from './routes/monitoringRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import { startAutomationScheduler } from './services/automationService.js';
+import { auditAndFixAllExerciseMedia } from './controllers/exerciseController.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -73,6 +74,7 @@ app.use('/api/admin', adminRoutes);
 
 const startServer = async (port = PORT) => {
   await connectDB();
+  await auditAndFixAllExerciseMedia();
   if (process.env.NODE_ENV !== 'test') {
     startAutomationScheduler();
   }

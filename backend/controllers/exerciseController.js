@@ -33,17 +33,149 @@ const exerciseFields = [
   'precautions',
 ];
 
-const pickExerciseFields = (body) =>
-  Object.fromEntries(
+export const getStandardVideoUrlForExercise = (name = '', bodyPart = '') => {
+  const n = String(name || '').toLowerCase();
+  const b = String(bodyPart || '').toLowerCase();
+
+  // Seated Leg Raise / Knee Extension / Long Arc Quad
+  if ((n.includes('seated') && n.includes('leg')) || n.includes('seated knee') || n.includes('long arc')) {
+    return 'https://www.youtube.com/watch?v=CWVEVBOGNE8'; // Ask Doctor Jo - Seated Leg Exercises
+  }
+
+  // Straight Leg Raise
+  if (n.includes('leg raise') || n.includes('straight leg') || n.includes('slr')) {
+    return 'https://www.youtube.com/watch?v=Ka19yzAlIGY'; // Ask Doctor Jo - Straight Leg Raise
+  }
+
+  // Quadriceps / Terminal Knee Extension / Quad Sets
+  if (n.includes('quad') || n.includes('quadriceps') || n.includes('terminal') || n.includes('tke') || b.includes('knee')) {
+    return 'https://www.youtube.com/watch?v=au62CidApd0'; // Ask Doctor Jo - Quad Sets
+  }
+
+  // Hamstring / Heel Slides
+  if (n.includes('hamstring') || n.includes('curl') || n.includes('heel slide')) {
+    return 'https://www.youtube.com/watch?v=qdxGglzCr1I'; // Knee Range of Motion
+  }
+
+  // Neck / Cervical / Chin Tuck
+  if (n.includes('chin tuck') || n.includes('cervical') || b.includes('neck')) {
+    return 'https://www.youtube.com/watch?v=QQMfNNHcf8w'; // Ask Doctor Jo - Chin Tucks
+  }
+
+  // Shoulder / Scapular Wall Slide
+  if (n.includes('wall slide') || n.includes('scapular') || n.includes('wall')) {
+    return 'https://www.youtube.com/watch?v=D351y9ecIwc'; // MGH - Wall Slide Exercise
+  }
+
+  // Shoulder / Pendulum / Arm
+  if (n.includes('pendulum') || b.includes('shoulder') || n.includes('arm')) {
+    return 'https://www.youtube.com/watch?v=QF_ubbr_RUE'; // Ask Doctor Jo - Codman Pendulum
+  }
+
+  // Back / Lumbar / Glute Bridge / Pelvic
+  if (n.includes('bridge') || n.includes('pelvic') || n.includes('cat') || b.includes('back') || b.includes('lumbar')) {
+    return 'https://www.youtube.com/watch?v=wPM8icPu6H8'; // Well+Good - Glute Bridge
+  }
+
+  // Core / Bird Dog
+  if (n.includes('bird dog') || n.includes('core') || n.includes('abdominal')) {
+    return 'https://www.youtube.com/watch?v=wiFNA3sqjCA'; // Howcast - Bird Dog Exercise
+  }
+
+  return 'https://www.youtube.com/watch?v=CWVEVBOGNE8';
+};
+
+export const getStandardImageUrlForExercise = (bodyPart = '') => {
+  const b = String(bodyPart || '').toLowerCase();
+  if (b.includes('knee')) return 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?auto=format&fit=crop&w=800&q=80';
+  if (b.includes('shoulder')) return 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=800&q=80';
+  if (b.includes('neck')) return 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=800&q=80';
+  if (b.includes('back') || b.includes('spine')) return 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=800&q=80';
+  return 'https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=800&q=80';
+};
+
+export const auditAndFixAllExerciseMedia = async () => {
+  try {
+    const exercises = await Exercise.find({});
+    for (const ex of exercises) {
+      let changed = false;
+      const isBadVideo =
+        !ex.videoUrl ||
+        typeof ex.videoUrl !== 'string' ||
+        !ex.videoUrl.trim() ||
+        ex.videoUrl.includes('example.com') ||
+        ex.videoUrl.includes('mock-') ||
+        ex.videoUrl.includes('dQw4w9WgXcQ') ||
+        ex.videoUrl.includes('4y_v1tE4i4w') ||
+        ex.videoUrl.includes('Xm8oB0bJzP0') ||
+        ex.videoUrl.includes('kYJmQn-3h34') ||
+        ex.videoUrl.includes('y3uVjJzB90E') ||
+        ex.videoUrl.includes('F3QfT08gR9Q') ||
+        ex.videoUrl.includes('W5_gJ3o_Y2I');
+
+      if (isBadVideo) {
+        ex.videoUrl = getStandardVideoUrlForExercise(ex.name, ex.targetBodyPart);
+        changed = true;
+      }
+
+      const isBadImage =
+        !ex.imageUrl ||
+        typeof ex.imageUrl !== 'string' ||
+        !ex.imageUrl.trim() ||
+        ex.imageUrl.includes('example.com');
+
+      if (isBadImage) {
+        ex.imageUrl = getStandardImageUrlForExercise(ex.targetBodyPart);
+        changed = true;
+      }
+
+      if (changed) {
+        await ex.save();
+      }
+    }
+  } catch (err) {
+    console.error('Error auditing exercise media:', err.message);
+  }
+};
+
+const pickExerciseFields = (body) => {
+  const result = Object.fromEntries(
     exerciseFields
       .filter((field) => body[field] !== undefined)
       .map((field) => [field, body[field]]),
   );
 
+  const name = result.name || body.name || '';
+  const bodyPart = result.targetBodyPart || body.targetBodyPart || '';
+
+  if (
+    !result.videoUrl ||
+    typeof result.videoUrl !== 'string' ||
+    !result.videoUrl.trim() ||
+    result.videoUrl.includes('example.com') ||
+    result.videoUrl.includes('mock-')
+  ) {
+    result.videoUrl = getStandardVideoUrlForExercise(name, bodyPart);
+  }
+
+  if (
+    !result.imageUrl ||
+    typeof result.imageUrl !== 'string' ||
+    !result.imageUrl.trim() ||
+    result.imageUrl.includes('example.com')
+  ) {
+    result.imageUrl = getStandardImageUrlForExercise(bodyPart);
+  }
+
+  return result;
+};
+
 export const listExercises = async (req, res) => {
   try {
     const therapist = await getTherapist(req.user);
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
+
+    await auditAndFixAllExerciseMedia();
 
     const exercises = await Exercise.find({ createdBy: therapist._id }).sort({ updatedAt: -1 }).lean();
     res.json(exercises);
@@ -142,6 +274,8 @@ export const listAssignmentOptions = async (req, res) => {
   try {
     const therapist = await getTherapist(req.user);
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
+
+    await auditAndFixAllExerciseMedia();
 
     const [patients, exercises, assignedPlans] = await Promise.all([
       Patient.find({})
@@ -315,6 +449,8 @@ export const getPatientExercises = async (req, res) => {
   try {
     const patient = await ensurePatientProfile(req.user);
     if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
+
+    await auditAndFixAllExerciseMedia();
 
     const patientIds = [patient._id, req.user._id];
 
@@ -511,6 +647,36 @@ export const ensureDefaultExerciseLibrary = async (clinicianId = null) => {
 
   const defaultExercises = [
     {
+      name: 'Seated Straight Leg Raise',
+      description: 'Strengthens the quadriceps and hip flexors while seated, improving knee stability without weight-bearing pressure.',
+      category: 'Strengthening',
+      difficulty: 'Easy',
+      duration: 8,
+      sets: 3,
+      reps: 10,
+      instructions: '1. Sit tall in a sturdy chair with feet flat. 2. Straighten one knee fully, lifting foot off floor. 3. Hold for 3 seconds, squeeze quad, and slowly lower.',
+      precautions: 'Do not lean back or arch your spine while raising leg.',
+      targetBodyPart: 'Knee',
+      videoUrl: 'https://www.youtube.com/watch?v=CWVEVBOGNE8',
+      imageUrl: 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?auto=format&fit=crop&w=800&q=80',
+      ...(assignedClinician ? { createdBy: assignedClinician } : {}),
+    },
+    {
+      name: 'Straight Leg Raise',
+      description: 'Lying supine straight leg raise to activate quadriceps and improve anterior hip strength.',
+      category: 'Strengthening',
+      difficulty: 'Medium',
+      duration: 8,
+      sets: 3,
+      reps: 10,
+      instructions: '1. Lie on back with one knee bent and one straight. 2. Lock straight knee and lift foot to height of opposite knee. 3. Hold for 2s, lower slowly.',
+      precautions: 'Keep lower back neutral and flat against surface.',
+      targetBodyPart: 'Knee',
+      videoUrl: 'https://www.youtube.com/watch?v=Ka19yzAlIGY',
+      imageUrl: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=800&q=80',
+      ...(assignedClinician ? { createdBy: assignedClinician } : {}),
+    },
+    {
       name: 'Quadriceps Set',
       description: 'Isometric exercise to activate and strengthen quadriceps muscles with minimal joint pressure.',
       category: 'Strengthening',
@@ -521,7 +687,7 @@ export const ensureDefaultExerciseLibrary = async (clinicianId = null) => {
       instructions: '1. Lie or sit with legs straight. 2. Tighten the thigh muscles, pushing the back of your knee into the surface. 3. Hold for 5 seconds, relax, and repeat.',
       precautions: 'Do not hold your breath. Stop if sharp knee pain develops.',
       targetBodyPart: 'Knee',
-      videoUrl: 'https://www.youtube.com/watch?v=y3uVjJzB90E',
+      videoUrl: 'https://www.youtube.com/watch?v=au62CidApd0',
       imageUrl: 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?auto=format&fit=crop&w=800&q=80',
       ...(assignedClinician ? { createdBy: assignedClinician } : {}),
     },
@@ -536,7 +702,7 @@ export const ensureDefaultExerciseLibrary = async (clinicianId = null) => {
       instructions: '1. Lie on back. 2. Slowly slide heel towards your glutes, bending knee. 3. Hold for 2 seconds. 4. Slide back to start smoothly.',
       precautions: 'Avoid jerky movements; maintain smooth control.',
       targetBodyPart: 'Knee',
-      videoUrl: 'https://www.youtube.com/watch?v=F3QfT08gR9Q',
+      videoUrl: 'https://www.youtube.com/watch?v=qdxGglzCr1I',
       imageUrl: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=800&q=80',
       ...(assignedClinician ? { createdBy: assignedClinician } : {}),
     },
@@ -551,7 +717,7 @@ export const ensureDefaultExerciseLibrary = async (clinicianId = null) => {
       instructions: '1. Stand with back and forearms against a wall. 2. Slowly slide forearms upwards maintaining wall contact. 3. Lower under control.',
       precautions: 'Do not arch your lower back away from the wall.',
       targetBodyPart: 'Shoulder',
-      videoUrl: 'https://www.youtube.com/watch?v=4y_v1tE4i4w',
+      videoUrl: 'https://www.youtube.com/watch?v=D351y9ecIwc',
       imageUrl: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=800&q=80',
       ...(assignedClinician ? { createdBy: assignedClinician } : {}),
     },
@@ -566,7 +732,7 @@ export const ensureDefaultExerciseLibrary = async (clinicianId = null) => {
       instructions: '1. Sit upright. 2. Gently glide chin straight backward as if making a double chin. 3. Hold for 5 seconds. 4. Release smoothly.',
       precautions: 'Do not tilt chin downwards; move head purely horizontally.',
       targetBodyPart: 'Neck',
-      videoUrl: 'https://www.youtube.com/watch?v=W5_gJ3o_Y2I',
+      videoUrl: 'https://www.youtube.com/watch?v=QQMfNNHcf8w',
       imageUrl: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=800&q=80',
       ...(assignedClinician ? { createdBy: assignedClinician } : {}),
     },
@@ -585,14 +751,44 @@ export const ensureDefaultExerciseLibrary = async (clinicianId = null) => {
       imageUrl: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=800&q=80',
       ...(assignedClinician ? { createdBy: assignedClinician } : {}),
     },
+    {
+      name: 'Bird Dog Lumbar Stabilization',
+      description: 'Quadruped core and back stabilization exercise promoting multi-segment spinal control.',
+      category: 'Stability',
+      difficulty: 'Medium',
+      duration: 8,
+      sets: 3,
+      reps: 10,
+      instructions: '1. Start on hands and knees. 2. Extend right arm and left leg simultaneously until parallel to floor. 3. Hold 3 seconds, lower and switch sides.',
+      precautions: 'Keep pelvis and torso level; avoid rotation.',
+      targetBodyPart: 'Back',
+      videoUrl: 'https://www.youtube.com/watch?v=wiFNA3sqjCA',
+      imageUrl: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=800&q=80',
+      ...(assignedClinician ? { createdBy: assignedClinician } : {}),
+    },
   ];
 
   for (const ex of defaultExercises) {
     const existing = await Exercise.findOne({ name: ex.name });
     if (!existing) {
       await Exercise.create(ex);
+    } else if (
+      !existing.videoUrl ||
+      existing.videoUrl.includes('example.com') ||
+      existing.videoUrl.includes('mock-') ||
+      existing.videoUrl.includes('4y_v1tE4i4w') ||
+      existing.videoUrl.includes('Xm8oB0bJzP0') ||
+      existing.videoUrl.includes('kYJmQn-3h34') ||
+      existing.videoUrl.includes('y3uVjJzB90E') ||
+      existing.videoUrl.includes('F3QfT08gR9Q') ||
+      existing.videoUrl.includes('W5_gJ3o_Y2I')
+    ) {
+      existing.videoUrl = ex.videoUrl;
+      await existing.save();
     }
   }
+
+  await auditAndFixAllExerciseMedia();
 };
 
 export const adoptStarterPlan = async (req, res) => {
