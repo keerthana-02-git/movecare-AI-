@@ -120,7 +120,12 @@ export const getTherapistRecommendations = async (req, res) => {
 
     let [patients, exercises] = await Promise.all([
       Patient.find({
-        $or: [{ assignedTherapist: therapist._id }, { _id: { $in: therapist.patientsAssigned || [] } }],
+        $or: [
+          { assignedTherapist: therapist._id },
+          { _id: { $in: therapist.patientsAssigned || [] } },
+          { assignedTherapist: null },
+          { assignedTherapist: { $exists: false } },
+        ],
       }).populate('user', 'name email').lean(),
       Exercise.find({ createdBy: therapist._id }).sort({ name: 1 }).lean(),
     ]);

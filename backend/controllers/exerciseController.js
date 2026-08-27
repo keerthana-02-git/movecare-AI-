@@ -120,6 +120,10 @@ export const assignExercise = async (req, res) => {
       return res.status(400).json({ message: 'Patient, exercise, plan name, start date and end date are required' });
     }
 
+    if (new Date(endDate) <= new Date(startDate)) {
+      return res.status(400).json({ message: 'End date must be after start date' });
+    }
+
     const therapist = await getTherapist(req.user);
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
 
@@ -200,8 +204,10 @@ export const getPatientExercises = async (req, res) => {
     const patient = await ensurePatientProfile(req.user);
     if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
 
+    const patientIds = [patient._id, req.user._id];
+
     const rawPlans = await ExercisePlan.find({
-      patient: patient._id,
+      patient: { $in: patientIds },
       status: { $in: ['Active', 'Paused'] },
     })
       .sort({ startDate: -1 })
@@ -215,7 +221,7 @@ export const getPatientExercises = async (req, res) => {
       exercises: (plan.exercises || []).filter((item) => item && item.exercise),
     }));
 
-    const progress = await Progress.find({ patient: patient._id })
+    const progress = await Progress.find({ patient: { $in: patientIds } })
       .sort({ datePerformed: -1 })
       .limit(100)
       .lean();
@@ -318,16 +324,17 @@ export const completePatientExercise = async (req, res) => {
     const sanitizedNotes = typeof notes === 'string' ? notes.trim().slice(0, 500) : undefined;
 
     // Look up plan explicitly or by exercise membership
+    const patientIds = [patient._id, req.user._id];
     let plan;
     if (planId) {
       plan = await ExercisePlan.findOne({
         _id: planId,
-        patient: patient._id,
+        patient: { $in: patientIds },
         status: { $in: ['Active', 'Paused'] },
       });
     } else {
       plan = await ExercisePlan.findOne({
-        patient: patient._id,
+        patient: { $in: patientIds },
         status: { $in: ['Active', 'Paused'] },
         'exercises.exercise': req.params.exerciseId,
       });

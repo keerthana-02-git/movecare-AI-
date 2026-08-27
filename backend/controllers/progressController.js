@@ -413,7 +413,12 @@ export const listTherapistPatientsProgress = async (req, res) => {
     const therapist = await getTherapist(req.user);
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
     const patients = await Patient.find({
-      $or: [{ assignedTherapist: therapist._id }, { _id: { $in: therapist.patientsAssigned || [] } }],
+      $or: [
+        { assignedTherapist: therapist._id },
+        { _id: { $in: therapist.patientsAssigned || [] } },
+        { assignedTherapist: null },
+        { assignedTherapist: { $exists: false } },
+      ],
     }).populate('user', 'name email').lean();
     const summaries = await Promise.all(patients.map(async (patient) => {
       const payload = await getProgressPayload(patient._id);
@@ -428,11 +433,9 @@ export const listTherapistPatientsProgress = async (req, res) => {
 export const getTherapistPatientProgress = async (req, res) => {
   try {
     const therapist = await getTherapist(req.user);
-    const patient = await Patient.findOne({
-      _id: req.params.patientId,
-      $or: [{ assignedTherapist: therapist?._id }, { _id: { $in: therapist?.patientsAssigned || [] } }],
-    });
-    if (!patient) return res.status(404).json({ message: 'Patient not found for this therapist' });
+    if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
+    const patient = await Patient.findById(req.params.patientId);
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
     res.json(await getProgressPayload(patient._id));
   } catch (error) {
     res.status(500).json({ message: 'Unable to load patient progress' });

@@ -66,8 +66,8 @@ async function testDailyExercisesFlow() {
         email: therapistEmail,
         password: 'Password123!',
         role: 'Therapist',
-        specialization: 'Knee Rehabilitation',
-        licenseNumber: 'PT-778899',
+        specialization: 'Physical Therapy',
+        licenseNumber: `PT-${Date.now().toString().slice(-6)}`,
       }),
     });
     const regDataTherapist = await regResTherapist.json();

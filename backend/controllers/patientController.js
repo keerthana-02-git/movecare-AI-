@@ -5,6 +5,7 @@ import {
   PainJournal,
   Patient,
   Progress,
+  User,
 } from '../models/index.js';
 
 export const ensurePatientProfile = async (user) => {
@@ -392,5 +393,64 @@ export const getPatientDashboard = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: 'Unable to load patient dashboard' });
+  }
+};
+
+export const updatePatientProfile = async (req, res) => {
+  try {
+    const patient = await ensurePatientProfile(req.user);
+    if (!patient) return res.status(404).json({ message: 'Patient profile not found' });
+
+    const {
+      name,
+      medicalCondition,
+      injuryDescription,
+      dateOfBirth,
+      gender,
+      phoneNumber,
+      address,
+      emergencyContact,
+    } = req.body;
+
+    if (medicalCondition !== undefined) {
+      patient.medicalCondition = String(medicalCondition).trim();
+    }
+    if (injuryDescription !== undefined) {
+      patient.injuryDescription = String(injuryDescription).trim();
+    }
+    if (dateOfBirth) {
+      patient.dateOfBirth = new Date(dateOfBirth);
+    }
+    if (gender && ['Male', 'Female', 'Other'].includes(gender)) {
+      patient.gender = gender;
+    }
+    if (phoneNumber !== undefined) {
+      const cleaned = String(phoneNumber).trim().replace(/\D/g, '');
+      patient.phoneNumber = cleaned.length >= 10 ? cleaned : String(phoneNumber).trim();
+    }
+    if (address !== undefined) {
+      patient.address = String(address).trim();
+    }
+    if (emergencyContact && typeof emergencyContact === 'object') {
+      patient.emergencyContact = {
+        name: emergencyContact.name || patient.emergencyContact?.name || '',
+        phone: emergencyContact.phone || patient.emergencyContact?.phone || '',
+      };
+    }
+
+    await patient.save();
+
+    if (name && typeof name === 'string' && name.trim()) {
+      await User.findByIdAndUpdate(req.user._id, { name: name.trim() });
+    }
+
+    const updatedProfile = await Patient.findById(patient._id).populate('user', 'name email role').lean();
+    res.json({
+      message: 'Profile updated successfully',
+      patient: updatedProfile,
+    });
+  } catch (error) {
+    const message = error.name === 'ValidationError' ? error.message : (error.message || 'Unable to update profile');
+    res.status(400).json({ message });
   }
 };

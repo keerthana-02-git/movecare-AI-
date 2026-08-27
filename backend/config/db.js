@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import dotenv from 'dotenv';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,39 +21,60 @@ const sanitizeError = (err) => {
 };
 
 const connectDB = async () => {
-  let uri = process.env.MONGODB_URI;
+  const originalUri = process.env.MONGODB_URI;
 
   try {
-    if (!uri) {
+    if (!originalUri) {
       if (process.env.NODE_ENV === 'production') {
         throw new Error('MONGODB_URI is required in production');
       }
-      memoryServer = await MongoMemoryServer.create();
-      uri = memoryServer.getUri();
-      process.env.MONGODB_URI = uri;
-      const conn = await mongoose.connect(uri);
-      console.log(`MongoDB connected (memory server): ${conn.connection.host}`);
-      return conn;
+      throw new Error('No MONGODB_URI configured');
     }
 
-    const conn = await mongoose.connect(uri);
-    console.log(`MongoDB connected: ${conn.connection.host}`);
+    // Connect to Atlas with 5 second timeout so startup is responsive
+    const conn = await mongoose.connect(originalUri, {
+      serverSelectionTimeoutMS: 5000,
+    });
+    console.log(`✅ MongoDB connected (Atlas Cloud): ${conn.connection.host}`);
     return conn;
   } catch (error) {
-    console.error('Primary MongoDB connection failed:', sanitizeError(error));
+    console.error('Primary MongoDB (Atlas) connection failed:', sanitizeError(error));
 
     if (process.env.NODE_ENV !== 'production') {
       try {
-        console.log('Falling back to in-memory MongoDB for local development...');
-        memoryServer = await MongoMemoryServer.create();
-        const memoryUri = memoryServer.getUri();
-        process.env.MONGODB_URI = memoryUri;
-        const conn = await mongoose.connect(memoryUri);
-        console.log(`MongoDB connected (memory server fallback): ${conn.connection.host}`);
+        console.log('📌 Atlas access note: Add your current IP or 0.0.0.0/0 to MongoDB Atlas Network Access.');
+        console.log('📦 Starting persistent local disk database so data survives backend restarts...');
+
+        const persistentDbDir = path.resolve(__dirname, '..', 'data', 'db');
+        if (!fs.existsSync(persistentDbDir)) {
+          fs.mkdirSync(persistentDbDir, { recursive: true });
+        }
+
+        memoryServer = await MongoMemoryServer.create({
+          instance: {
+            dbPath: persistentDbDir,
+            storageEngine: 'wiredTiger',
+          },
+        });
+
+        const persistentUri = memoryServer.getUri();
+        process.env.MONGODB_URI = persistentUri;
+        const conn = await mongoose.connect(persistentUri);
+        console.log(`✅ MongoDB connected (persistent disk storage): ${conn.connection.host}`);
         return conn;
-      } catch (memoryError) {
-        console.error('Memory MongoDB fallback failed:', sanitizeError(memoryError));
-        process.exit(1);
+      } catch (diskError) {
+        console.error('Persistent disk fallback encountered error, attempting standard fallback:', sanitizeError(diskError));
+        try {
+          memoryServer = await MongoMemoryServer.create();
+          const memUri = memoryServer.getUri();
+          process.env.MONGODB_URI = memUri;
+          const conn = await mongoose.connect(memUri);
+          console.log(`MongoDB connected (memory server fallback): ${conn.connection.host}`);
+          return conn;
+        } catch (memErr) {
+          console.error('All MongoDB connection options failed:', sanitizeError(memErr));
+          process.exit(1);
+        }
       }
     }
 

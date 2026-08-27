@@ -341,8 +341,8 @@ async function runTestSuite() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message);
-    if (!Array.isArray(data) || data.length === 0) throw new Error('No available therapists');
-    availableTherapistId = data[0]._id;
+    const targetTherapist = data.find((t) => t.user?.email === therapistEmail) || data[0];
+    availableTherapistId = targetTherapist._id;
   });
 
   let slots = [];

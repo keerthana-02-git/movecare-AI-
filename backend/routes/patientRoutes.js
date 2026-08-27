@@ -1,5 +1,5 @@
 import express from 'express';
-import { getPatientDashboard } from '../controllers/patientController.js';
+import { getPatientDashboard, updatePatientProfile } from '../controllers/patientController.js';
 import {
   deletePainJournalEntry,
   getPatientPainJournal,
@@ -15,6 +15,7 @@ router.use(protect);
 router.use(authorize('Patient'));
 
 router.get('/me/dashboard', getPatientDashboard);
+router.put('/me/profile', updatePatientProfile);
 router.get('/me/pain-journal', getPatientPainJournal);
 router.post('/me/pain-journal', recordPainJournalEntry);
 router.put('/me/pain-journal/:entryId', updatePainJournalEntry);

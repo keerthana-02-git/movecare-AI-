@@ -53,9 +53,11 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ message: 'User already exists with this email' });
     }
 
-    const requestedRole = ['Patient', 'Therapist', 'Admin'].includes(req.body.role)
-      ? req.body.role
-      : 'Patient';
+    if (req.body.role && !['Patient', 'Therapist', 'Admin'].includes(req.body.role)) {
+      return res.status(400).json({ message: 'Invalid user role specified' });
+    }
+
+    const requestedRole = req.body.role || 'Patient';
 
     const user = await User.create({
       name: String(name).trim(),
@@ -329,9 +331,23 @@ export const getGoogleAuthUrl = (req, res) => {
   res.json({ url: googleAuthUrl });
 };
 
+const resolveClientOrigin = (req) => {
+  const configuredOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  const referer = req.headers.referer;
+  if (referer) {
+    const matched = configuredOrigins.find((o) => referer.startsWith(o));
+    if (matched) return matched;
+  }
+  return configuredOrigins[0] || 'http://localhost:5173';
+};
+
 export const googleCallback = async (req, res) => {
   const { code, error } = req.query;
-  const clientOrigin = process.env.CLIENT_ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
+  const clientOrigin = resolveClientOrigin(req);
 
   if (error || !code) {
     const errorMsg = error || 'Google sign-in was cancelled or failed.';

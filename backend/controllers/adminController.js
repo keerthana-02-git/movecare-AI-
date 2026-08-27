@@ -9,8 +9,13 @@ import {
 
 export const getAdminOverview = async (req, res) => {
   try {
-    const [users, therapists, exercises, appointments, stats] = await Promise.all([
+    const [users, patients, therapists, exercises, appointments, stats] = await Promise.all([
       User.find().select('name email role createdAt').sort({ createdAt: -1 }).lean(),
+      Patient.find()
+        .populate('user', 'name email role')
+        .populate({ path: 'assignedTherapist', populate: { path: 'user', select: 'name email' } })
+        .sort({ createdAt: -1 })
+        .lean(),
       Therapist.find().populate('user', 'name email role').sort({ createdAt: -1 }).lean(),
       Exercise.find().populate({ path: 'createdBy', populate: { path: 'user', select: 'name' } }).sort({ updatedAt: -1 }).lean(),
       Appointment.find()
@@ -32,6 +37,7 @@ export const getAdminOverview = async (req, res) => {
 
     res.json({
       users,
+      patients,
       therapists,
       exercises,
       appointments,
