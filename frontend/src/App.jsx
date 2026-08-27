@@ -108,8 +108,17 @@ function Navbar({ user, onLogout }) {
   const navigate = useNavigate()
   const [unreadCount, setUnreadCount] = useState(0)
 
+  const activeUser = user || (() => {
+    try {
+      const saved = localStorage.getItem('movecare-user')
+      return saved ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
+  })()
+
   useEffect(() => {
-    if (!user) {
+    if (!activeUser) {
       setUnreadCount(0)
       return
     }
@@ -129,7 +138,7 @@ function Navbar({ user, onLogout }) {
       isMounted = false
       clearInterval(interval)
     }
-  }, [user])
+  }, [activeUser])
 
   const handleLogout = async () => {
     const token = localStorage.getItem('movecare-token')
@@ -140,7 +149,7 @@ function Navbar({ user, onLogout }) {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-      })
+      }).catch(() => {})
     }
 
     localStorage.removeItem('movecare-token')
@@ -173,21 +182,21 @@ function Navbar({ user, onLogout }) {
         </nav>
 
         <div className="nav-actions">
-          {user ? (
+          {activeUser ? (
             <>
               <NavLink to="/dashboard" className="secondary-btn small">
-                Dashboard
+                {activeUser.role === 'Admin' ? 'Admin console' : activeUser.role === 'Therapist' ? 'Therapist console' : 'Dashboard'}
               </NavLink>
-              {user.role === 'Therapist' && <NavLink to="/exercise-management" className="secondary-btn small">Exercises</NavLink>}
-              {user.role === 'Patient' && <NavLink to="/my-exercises" className="secondary-btn small">My exercises</NavLink>}
-              {user.role === 'Therapist' && <NavLink to="/therapist-appointments" className="secondary-btn small">Appointments</NavLink>}
-              {user.role === 'Patient' && <NavLink to="/appointments" className="secondary-btn small">Appointments</NavLink>}
-              {user.role === 'Therapist' && <NavLink to="/patient-progress" className="secondary-btn small">Progress</NavLink>}
-              {user.role === 'Patient' && <NavLink to="/progress" className="secondary-btn small">Progress</NavLink>}
-              {user.role === 'Patient' && <NavLink to="/pain-journal" className="secondary-btn small">Pain journal</NavLink>}
-              {user.role === 'Patient' && <NavLink to="/ai-assistant" className="secondary-btn small">AI guide</NavLink>}
-              {user.role === 'Therapist' && <NavLink to="/monitoring" className="secondary-btn small">Live monitor</NavLink>}
-              {user.role === 'Patient' && <NavLink to="/monitoring" className="secondary-btn small">Live monitor</NavLink>}
+              {activeUser.role === 'Therapist' && <NavLink to="/exercise-management" className="secondary-btn small">Exercises</NavLink>}
+              {activeUser.role === 'Patient' && <NavLink to="/my-exercises" className="secondary-btn small">My exercises</NavLink>}
+              {activeUser.role === 'Therapist' && <NavLink to="/therapist-appointments" className="secondary-btn small">Appointments</NavLink>}
+              {activeUser.role === 'Patient' && <NavLink to="/appointments" className="secondary-btn small">Appointments</NavLink>}
+              {activeUser.role === 'Therapist' && <NavLink to="/patient-progress" className="secondary-btn small">Progress</NavLink>}
+              {activeUser.role === 'Patient' && <NavLink to="/progress" className="secondary-btn small">Progress</NavLink>}
+              {activeUser.role === 'Patient' && <NavLink to="/pain-journal" className="secondary-btn small">Pain journal</NavLink>}
+              {activeUser.role === 'Patient' && <NavLink to="/ai-assistant" className="secondary-btn small">AI guide</NavLink>}
+              {activeUser.role === 'Therapist' && <NavLink to="/monitoring" className="secondary-btn small">Live monitor</NavLink>}
+              {activeUser.role === 'Patient' && <NavLink to="/monitoring" className="secondary-btn small">Live monitor</NavLink>}
               <NavLink to="/notifications" className="secondary-btn small nav-notif-btn" title="View notifications and care reminders">
                 🔔 <span className="nav-notif-text">Inbox</span>
                 {unreadCount > 0 && <span className="nav-notif-badge">{unreadCount}</span>}
@@ -869,6 +878,14 @@ function AuthPage({ mode, onAuthComplete }) {
   const isRegister = mode === 'register'
 
   useEffect(() => {
+    const token = localStorage.getItem('movecare-token')
+    const savedUser = localStorage.getItem('movecare-user')
+    if (token && savedUser) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [navigate])
+
+  useEffect(() => {
     const urlError = searchParams.get('error')
     if (urlError) {
       setError(decodeURIComponent(urlError))
@@ -932,7 +949,7 @@ function AuthPage({ mode, onAuthComplete }) {
       localStorage.setItem('movecare-token', data.token)
       localStorage.setItem('movecare-user', JSON.stringify(data.user))
       onAuthComplete(data.user)
-      navigate('/dashboard')
+      navigate('/dashboard', { replace: true })
     } catch (submittedError) {
       if (submittedError.name === 'TypeError' && (submittedError.message === 'Failed to fetch' || submittedError.message?.includes('fetch') || submittedError.message?.includes('NetworkError'))) {
         setError(`Unable to reach backend server at ${API_BASE_URL}. Please ensure the server is running on port 5000.`)
@@ -1039,11 +1056,20 @@ function AuthPage({ mode, onAuthComplete }) {
 }
 
 function ProtectedRoute({ user, requiredRole }) {
-  if (!user) {
+  const activeUser = user || (() => {
+    try {
+      const saved = localStorage.getItem('movecare-user')
+      return saved ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
+  })()
+
+  if (!activeUser) {
     return <Navigate to="/login" replace />
   }
 
-  if (requiredRole && user.role !== requiredRole) {
+  if (requiredRole && activeUser.role !== requiredRole) {
     return <Navigate to="/dashboard" replace />
   }
 
@@ -1056,20 +1082,6 @@ function formatElapsed(seconds = 0) {
   return `${minutes}:${remaining}`
 }
 
-function LiveMonitoringCard({ role }) {
-  const [value, setValue] = useState(null)
-  useEffect(() => {
-    const load = () => apiRequest(role === 'Therapist' ? '/monitoring/therapist/live' : '/monitoring/patient/current').then(setValue).catch(() => {})
-    load()
-    const interval = window.setInterval(load, 5000)
-    return () => window.clearInterval(interval)
-  }, [role])
-  if (role === 'Therapist') {
-    const count = Array.isArray(value) ? value.length : 0
-    return <section className="monitoring-preview"><div><span className="card-eyebrow">Live monitoring</span><h3>{count ? `${count} active demo session${count === 1 ? '' : 's'}` : 'No active sessions'}</h3><p>Poll assigned patient sessions for exercise status and live signals.</p></div><NavLink className="secondary-btn small" to="/monitoring">Open monitor</NavLink></section>
-  }
-  return <section className="monitoring-preview"><div><span className="card-eyebrow">Session monitor</span><h3>{value?.status === 'Active' ? `${value.exercise?.name} in progress` : 'Start a monitored session'}</h3><p>{value?.status === 'Active' ? `${formatElapsed(value.elapsedSeconds)} elapsed · ${value.currentReps}/${value.targetReps} reps` : 'Use simulated session data to see your progress update live.'}</p></div><NavLink className="secondary-btn small" to="/monitoring">Open monitor</NavLink></section>
-}
 
 function PatientMonitoringPage() {
   const [exerciseData, setExerciseData] = useState(null)
@@ -1133,12 +1145,6 @@ function TherapistMonitoringPage() {
   return <main className="page-shell monitoring-page"><div className="container management-wrap"><div className="management-heading"><span className="eyebrow accent">Simulated demo data</span><h2>Live patient monitoring</h2><p>Monitor active exercise sessions from assigned patients. Updates refresh automatically every three seconds.</p></div>{error && <div className="form-error" role="alert">{error}</div>}{sessions.length ? <div className="live-session-grid">{sessions.map((session) => <article className="live-session-card" key={session._id}><div className="session-console-header"><div><span className="card-eyebrow">{session.patient?.user?.name}</span><h3>{session.exercise?.name}</h3></div><span className="session-status active">Live</span></div><div className="live-readings"><div><span>Elapsed</span><strong>{formatElapsed(session.elapsedSeconds)}</strong></div><div><span>Reps</span><strong>{session.currentReps}/{session.targetReps}</strong></div><div><span>Pain</span><strong>{session.painLevel ?? '--'}/10</strong></div><div><span>Mobility</span><strong>{session.mobilityScore ?? '--'}/100</strong></div></div><div className="session-progress"><span style={{ width: `${Math.min(100, (session.currentReps / session.targetReps) * 100)}%` }} /></div><small className="demo-label">Demo sensor · Updated {formatDate(session.updatedAt)}</small></article>)}</div> : <section className="management-panel"><p className="empty-state">No active patient sessions. This panel will update when a patient starts a demo session.</p></section>}</div></main>
 }
 
-function NotificationPreview() {
-  const [data, setData] = useState(null)
-  useEffect(() => { apiRequest('/notifications?limit=4').then(setData).catch(() => {}) }, [])
-  if (!data) return null
-  return <section className="notification-preview"><div><span className="card-eyebrow">Inbox</span><h3>{data.unreadCount ? `${data.unreadCount} unread notification${data.unreadCount === 1 ? '' : 's'}` : 'All caught up'}</h3><p>{data.notifications[0]?.title || 'No new updates yet.'}</p></div><NavLink className="secondary-btn small" to="/notifications">Open inbox</NavLink></section>
-}
 
 function notificationIcon(type) {
   const icons = {
@@ -1486,52 +1492,6 @@ function NotificationsPage({ user }) {
   )
 }
 
-function DashboardPage({ user }) {
-  const roleContent = {
-    Patient: {
-      title: 'Patient dashboard',
-      summary: 'Your rehabilitation plan, monitoring insights, and therapy progress are ready to review.',
-      list: ['Weekly movement goals', 'Remote check-ins', 'Exercise adherence reporting'],
-    },
-    Therapist: {
-      title: 'Therapist dashboard',
-      summary: 'Track assigned patients, monitor progress, and adjust care plans efficiently.',
-      list: ['Patient progress review', 'AI insights', 'Care plan updates'],
-    },
-    Admin: {
-      title: 'Admin dashboard',
-      summary: 'Manage program health, user access, and operational oversight across the platform.',
-      list: ['System monitoring', 'User management', 'Compliance review'],
-    },
-  }
-
-  const content = roleContent[user.role] || roleContent.Patient
-
-  return (
-    <main className="page-shell">
-      <div className="container dashboard-wrap">
-        <div className="dashboard-header">
-          <div>
-            <span className="eyebrow accent">{user.role}</span>
-            <h2>{content.title}</h2>
-          </div>
-          <span className="role-badge">{user.name}</span>
-        </div>
-
-        <div className="dashboard-panel">
-          <p>{content.summary}</p>
-          <ul>
-            {content.list.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </div>
-        {user.role === 'Therapist' && <LiveMonitoringCard role="Therapist" />}
-        {user.role !== 'Patient' && <NotificationPreview />}
-      </div>
-    </main>
-  )
-}
 
 function AdminDashboardPage({ user }) {
   const [data, setData] = useState(null)
@@ -1964,21 +1924,21 @@ function TherapistDashboardPage({ user }) {
   const loadDashboard = async () => {
     try {
       const [patients, appointments, options, recommendations, notifs] = await Promise.all([
-        apiRequest('/progress/patients'),
-        apiRequest('/appointments/therapist'),
-        apiRequest('/exercises/assignment-options'),
-        apiRequest('/ai/therapist/recommendations'),
+        apiRequest('/progress/patients').catch(() => []),
+        apiRequest('/appointments/therapist').catch(() => []),
+        apiRequest('/exercises/assignment-options').catch(() => ({ patients: [], exercises: [] })),
+        apiRequest('/ai/therapist/recommendations').catch(() => []),
         apiRequest('/notifications?limit=5').catch(() => ({ notifications: [], unreadCount: 0 })),
       ])
       setData({
-        patients,
-        appointments,
-        options,
-        recommendations,
+        patients: Array.isArray(patients) ? patients : [],
+        appointments: Array.isArray(appointments) ? appointments : [],
+        options: options || { patients: [], exercises: [] },
+        recommendations: Array.isArray(recommendations) ? recommendations : [],
         notifications: notifs?.notifications || [],
         unreadAlerts: notifs?.unreadCount || 0,
       })
-      setSelectedId((current) => current || patients[0]?.patient?._id || '')
+      setSelectedId((current) => current || (patients && patients[0]?.patient?._id) || '')
       setError('')
     } catch (loadError) { setError(loadError.message) }
   }
@@ -1993,13 +1953,15 @@ function TherapistDashboardPage({ user }) {
   if (!data) return <LoadingDashboard />
 
   const today = new Date()
-  const selected = data.patients.find((item) => item.patient._id === selectedId)
-  const upcoming = data.appointments.filter((item) => new Date(item.appointmentDate) >= today && !['Cancelled', 'NoShow'].includes(item.status)).slice(0, 4)
-  const history = data.appointments.filter((item) => new Date(item.appointmentDate) < today || ['Cancelled', 'NoShow'].includes(item.status)).slice().reverse().slice(0, 5)
-  const averageAdherence = data.patients.length ? Math.round(data.patients.reduce((total, item) => total + item.summary.exerciseAdherence, 0) / data.patients.length) : 0
+  const selected = Array.isArray(data.patients) ? data.patients.find((item) => item?.patient?._id === selectedId) : null
+  const upcoming = Array.isArray(data.appointments) ? data.appointments.filter((item) => new Date(item.appointmentDate) >= today && !['Cancelled', 'NoShow'].includes(item.status)).slice(0, 4) : []
+  const history = Array.isArray(data.appointments) ? data.appointments.filter((item) => new Date(item.appointmentDate) < today || ['Cancelled', 'NoShow'].includes(item.status)).slice().reverse().slice(0, 5) : []
+  const averageAdherence = data.patients.length ? Math.round(data.patients.reduce((total, item) => total + (item.summary?.exerciseAdherence || 0), 0) / data.patients.length) : 0
+  const firstName = user?.name ? user.name.split(' ')[0] : 'Clinician'
+  const initial = user?.name ? user.name.charAt(0) : 'T'
 
   return <main className="page-shell dashboard-page therapist-dashboard-page"><div className="container management-wrap">
-    <div className="dashboard-hero"><div><span className="eyebrow accent">Therapist workspace</span><h2>Good to see you, {user.name.split(' ')[0]}.</h2><p>Your assigned caseload, schedule, and clinical signals in one place.</p></div><div className="dashboard-avatar" aria-hidden="true">{user.name.charAt(0)}</div></div>
+    <div className="dashboard-hero"><div><span className="eyebrow accent">Therapist workspace</span><h2>Good to see you, {firstName}.</h2><p>Your assigned caseload, schedule, and clinical signals in one place.</p></div><div className="dashboard-avatar" aria-hidden="true">{initial}</div></div>
     {error && <div className="form-error" role="alert">{error}</div>}
     <div className="therapist-stat-grid">
       <ProgressMetric label="Assigned patients" value={data.patients.length} />
@@ -4865,7 +4827,26 @@ function App() {
           <Route path="/auth/google/callback" element={<GoogleCallbackPage onAuthComplete={handleAuthComplete} />} />
 
           <Route element={<ProtectedRoute user={user} />}>
-            <Route path="/dashboard" element={user?.role === 'Patient' ? <PatientDashboardPage user={user} /> : user?.role === 'Therapist' ? <TherapistDashboardPage user={user} /> : user?.role === 'Admin' ? <AdminDashboardPage user={user} /> : <DashboardPage user={user} />} />
+            <Route
+              path="/dashboard"
+              element={
+                (() => {
+                  const activeUser = user || (() => {
+                    try {
+                      const saved = localStorage.getItem('movecare-user')
+                      return saved ? JSON.parse(saved) : null
+                    } catch {
+                      return null
+                    }
+                  })()
+
+                  if (!activeUser) return <Navigate to="/login" replace />
+                  if (activeUser.role === 'Therapist') return <TherapistDashboardPage user={activeUser} />
+                  if (activeUser.role === 'Admin') return <AdminDashboardPage user={activeUser} />
+                  return <PatientDashboardPage user={activeUser} />
+                })()
+              }
+            />
             <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/exercise-management" element={<ExerciseManagementPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Patient" />}><Route path="/my-exercises" element={<PatientExercisesPage />} /></Route>
             <Route element={<ProtectedRoute user={user} requiredRole="Therapist" />}><Route path="/therapist-appointments" element={<TherapistAppointmentsPage />} /></Route>
