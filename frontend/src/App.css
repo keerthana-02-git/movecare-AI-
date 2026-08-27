@@ -6111,6 +6111,530 @@
   }
 }
 
+/* ==========================================================================
+   MOVECARE AI — 3D ULTRA-MODERN AUTHENTICATION SCENE & TYPOGRAPHY
+   ========================================================================== */
+
+.auth-page-3d-scene {
+  min-height: calc(100vh - 76px);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.25rem;
+  perspective: 1200px;
+  background: 
+    radial-gradient(circle at 15% 20%, rgba(59, 130, 246, 0.12) 0%, transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(14, 165, 233, 0.14) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.06) 0%, transparent 65%),
+    linear-gradient(180deg, #f8fafc 0%, #edf4fc 100%);
+}
+
+/* Ambient 3D Glowing Background Orbs */
+.auth-bg-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.65;
+  animation: floatOrb 12s ease-in-out infinite alternate;
+}
+
+.auth-bg-orb-1 {
+  width: 420px;
+  height: 420px;
+  top: -80px;
+  left: -80px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.25), rgba(6, 182, 212, 0.2));
+}
+
+.auth-bg-orb-2 {
+  width: 480px;
+  height: 480px;
+  bottom: -100px;
+  right: -100px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.22), rgba(139, 92, 246, 0.18));
+  animation-duration: 16s;
+  animation-delay: -4s;
+}
+
+.auth-bg-orb-3 {
+  width: 320px;
+  height: 320px;
+  top: 40%;
+  left: 60%;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(59, 130, 246, 0.15));
+  animation-duration: 14s;
+  animation-delay: -8s;
+}
+
+@keyframes floatOrb {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(25px, -30px) scale(1.08); }
+  100% { transform: translate(-20px, 25px) scale(0.95); }
+}
+
+/* 3D Stage Wrapper */
+.auth-stage-3d {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  perspective: 1200px;
+}
+
+/* Floating 3D Pills */
+.auth-floating-pill {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.95rem;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 
+    0 12px 28px -6px rgba(15, 23, 42, 0.08),
+    0 6px 14px -3px rgba(37, 99, 235, 0.12),
+    inset 0 1px 1px rgba(255, 255, 255, 0.9);
+  z-index: 2;
+  pointer-events: none;
+  animation: floatPill 6s ease-in-out infinite;
+}
+
+.auth-floating-pill-left {
+  top: -24px;
+  left: -28px;
+  color: #0369a1;
+  animation-delay: 0s;
+}
+
+.auth-floating-pill-right {
+  bottom: -18px;
+  right: -24px;
+  color: #15803d;
+  animation-delay: -3s;
+}
+
+@keyframes floatPill {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(1.5deg); }
+}
+
+/* 3D Glassmorphic Auth Card */
+.auth-card-3d-premium {
+  position: relative;
+  border-radius: 1.5rem;
+  padding: 2.5rem 2.25rem;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 
+    0 25px 60px -15px rgba(15, 23, 42, 0.14),
+    0 12px 30px -8px rgba(37, 99, 235, 0.15),
+    0 0 0 1px rgba(226, 232, 240, 0.6),
+    inset 0 1px 2px rgba(255, 255, 255, 0.95),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.02);
+  transform-style: preserve-3d;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+  will-change: transform;
+}
+
+.auth-card-3d-premium:hover {
+  box-shadow: 
+    0 32px 70px -15px rgba(15, 23, 42, 0.18),
+    0 16px 36px -8px rgba(37, 99, 235, 0.22),
+    0 0 0 1px rgba(186, 230, 253, 0.8),
+    inset 0 1px 3px rgba(255, 255, 255, 1);
+}
+
+/* 3D Card Sheen / Reflection Overlay */
+.auth-card-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 1.5rem;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 3D Header Section */
+.auth-3d-header {
+  text-align: center;
+  margin-bottom: 2rem;
+  position: relative;
+  z-index: 2;
+}
+
+.auth-3d-badge-orb {
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 1.1rem;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+  background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
+  box-shadow: 
+    0 12px 24px -4px rgba(37, 99, 235, 0.45),
+    0 4px 10px -2px rgba(6, 182, 212, 0.3),
+    inset 0 2px 4px rgba(255, 255, 255, 0.4),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.2);
+  position: relative;
+  transform: translateZ(20px);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.auth-3d-badge-orb::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.4), rgba(6, 182, 212, 0.2));
+  z-index: -1;
+  filter: blur(6px);
+  opacity: 0.7;
+}
+
+.auth-3d-badge-orb:hover {
+  transform: translateZ(28px) scale(1.05) rotate(4deg);
+  box-shadow: 
+    0 16px 30px -4px rgba(37, 99, 235, 0.55),
+    0 6px 14px -2px rgba(6, 182, 212, 0.4);
+}
+
+.auth-3d-brand-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, #1d4ed8, #0284c7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 0.35rem;
+}
+
+.auth-3d-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+  margin: 0 0 0.5rem;
+  line-height: 1.25;
+}
+
+.auth-3d-subtitle {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.92rem;
+  color: #475569;
+  line-height: 1.55;
+  margin: 0;
+  font-weight: 500;
+}
+
+/* 3D Mode Toggle Switch */
+.auth-mode-toggle-3d {
+  display: flex;
+  background: rgba(241, 245, 249, 0.9);
+  padding: 4px;
+  border-radius: 14px;
+  margin-bottom: 1.75rem;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.auth-mode-btn-3d {
+  flex: 1;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  border: none;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #64748b;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  text-decoration: none;
+  display: block;
+}
+
+.auth-mode-btn-3d.active {
+  color: #0f172a;
+  background: #ffffff;
+  box-shadow: 
+    0 4px 12px -2px rgba(15, 23, 42, 0.1),
+    0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+/* 3D Input Fields with High Legibility */
+.auth-input-group {
+  margin-bottom: 1.25rem;
+  position: relative;
+  z-index: 2;
+}
+
+.auth-label-3d {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.01em;
+}
+
+.auth-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.auth-input-icon {
+  position: absolute;
+  left: 1rem;
+  color: #94a3b8;
+  font-size: 1.1rem;
+  pointer-events: none;
+  transition: color 0.2s ease;
+}
+
+.auth-input-3d {
+  width: 100%;
+  padding: 0.82rem 1rem 0.82rem 2.85rem;
+  border-radius: 0.85rem;
+  border: 1.5px solid #e2e8f0;
+  background: rgba(248, 250, 252, 0.85);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.95rem;
+  color: #0f172a;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.02);
+  outline: none;
+}
+
+.auth-input-3d::placeholder {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.auth-input-3d:hover {
+  border-color: #cbd5e1;
+  background: #ffffff;
+}
+
+.auth-input-3d:focus {
+  background: #ffffff;
+  border-color: #2563eb;
+  box-shadow: 
+    0 0 0 4px rgba(37, 99, 235, 0.12),
+    0 4px 12px rgba(37, 99, 235, 0.08),
+    inset 0 1px 1px rgba(255, 255, 255, 1);
+  transform: translateY(-1px);
+}
+
+.auth-input-3d:focus ~ .auth-input-icon,
+.auth-input-wrapper:focus-within .auth-input-icon {
+  color: #2563eb;
+}
+
+.auth-eye-btn {
+  position: absolute;
+  right: 0.85rem;
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0.4rem;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.auth-eye-btn:hover {
+  color: #1e293b;
+  background: rgba(226, 232, 240, 0.6);
+}
+
+/* 3D Tactile Submit Button */
+.auth-button-3d-primary {
+  width: 100%;
+  margin-top: 1.25rem;
+  padding: 0.95rem 1.5rem;
+  border: none;
+  border-radius: 0.85rem;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #0284c7 100%);
+  box-shadow: 
+    0 10px 25px -4px rgba(37, 99, 235, 0.45),
+    0 4px 8px -2px rgba(37, 99, 235, 0.3),
+    inset 0 1px 1px rgba(255, 255, 255, 0.4),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-button-3d-primary::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+  transform: skewX(-20deg);
+  transition: 0.6s;
+}
+
+.auth-button-3d-primary:hover:not(:disabled)::after {
+  left: 140%;
+}
+
+.auth-button-3d-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 14px 32px -4px rgba(37, 99, 235, 0.55),
+    0 6px 12px -2px rgba(37, 99, 235, 0.35),
+    inset 0 1px 2px rgba(255, 255, 255, 0.5);
+}
+
+.auth-button-3d-primary:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
+  box-shadow: 
+    0 6px 16px -2px rgba(37, 99, 235, 0.4),
+    inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* 3D Divider */
+.auth-divider-3d {
+  display: flex;
+  align-items: center;
+  margin: 1.5rem 0;
+  color: #94a3b8;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.auth-divider-3d::before,
+.auth-divider-3d::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e2e8f0 40%, #e2e8f0 60%, transparent);
+}
+
+.auth-divider-3d span {
+  padding: 0 0.85rem;
+}
+
+/* Clear Alerts & Messages */
+.auth-alert-3d {
+  border-radius: 0.85rem;
+  padding: 0.85rem 1.1rem;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  line-height: 1.45;
+  animation: fadeInDown 0.3s ease-out;
+}
+
+.auth-alert-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.08);
+}
+
+.auth-alert-success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.08);
+}
+
+.auth-active-user-pill {
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  border: 1px solid #86efac;
+  border-radius: 0.85rem;
+  padding: 0.75rem 1.1rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.86rem;
+  color: #166534;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.06);
+}
+
+.auth-active-user-pill strong {
+  font-weight: 800;
+}
+
+.auth-footer-link {
+  text-align: center;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 0.88rem;
+  color: #64748b;
+  margin-top: 1.5rem;
+  font-weight: 500;
+}
+
+.auth-footer-link a,
+.auth-footer-link button {
+  color: #2563eb;
+  font-weight: 700;
+  text-decoration: none;
+  margin-left: 0.3rem;
+  transition: color 0.15s ease;
+}
+
+.auth-footer-link a:hover,
+.auth-footer-link button:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+
 
 
 

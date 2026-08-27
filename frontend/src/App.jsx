@@ -888,6 +888,8 @@ function AuthPage({ mode, onAuthComplete }) {
   const [successMsg, setSuccessMsg] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [tilt, setTilt] = useState({ x: 0, y: 0 })
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
 
@@ -902,6 +904,20 @@ function AuthPage({ mode, onAuthComplete }) {
       return null
     }
   })()
+
+  const handleMouseMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left - rect.width / 2
+    const y = e.clientY - rect.top - rect.height / 2
+    setTilt({
+      x: Number((-(y / (rect.height / 2)) * 6).toFixed(2)),
+      y: Number(((x / (rect.width / 2)) * 6).toFixed(2)),
+    })
+  }
+
+  const handleMouseLeave = () => {
+    setTilt({ x: 0, y: 0 })
+  }
 
   useEffect(() => {
     const urlError = searchParams.get('error')
@@ -1030,50 +1046,107 @@ function AuthPage({ mode, onAuthComplete }) {
   }
 
   return (
-    <main className="page-shell auth-page-pastel-bg">
-      <div className="container auth-wrap">
+    <main className="page-shell auth-page-3d-scene">
+      {/* Ambient 3D Glowing Background Orbs */}
+      <div className="auth-bg-orb auth-bg-orb-1" aria-hidden="true" />
+      <div className="auth-bg-orb auth-bg-orb-2" aria-hidden="true" />
+      <div className="auth-bg-orb auth-bg-orb-3" aria-hidden="true" />
+
+      <div className="auth-stage-3d">
+        {/* Floating 3D Pills */}
+        <div className="auth-floating-pill auth-floating-pill-left" aria-hidden="true">
+          <span>🩺</span> Clinical Rehabilitation AI
+        </div>
+        <div className="auth-floating-pill auth-floating-pill-right" aria-hidden="true">
+          <span>🔒</span> HIPAA & MongoDB Secured
+        </div>
+
         {isResetMode ? (
-          <form className="auth-card auth-card-3d" onSubmit={handlePasswordReset}>
+          <form
+            className="auth-card-3d-premium"
+            onSubmit={handlePasswordReset}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+            style={{
+              transform: `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) translateZ(8px)`,
+            }}
+          >
+            <div className="auth-card-sheen" aria-hidden="true" />
+
             <div className="auth-3d-header">
               <div className="auth-3d-badge-orb" aria-hidden="true">🔑</div>
-              <span className="eyebrow accent" style={{ letterSpacing: '0.08em', fontWeight: 700 }}>MoveCare AI</span>
-              <h2>Reset account password</h2>
-              <p className="auth-3d-subtitle">Update your password to access your clinical physical therapy portal</p>
+              <div className="auth-3d-brand-tag">MoveCare AI Security</div>
+              <h2 className="auth-3d-title">Reset Account Password</h2>
+              <p className="auth-3d-subtitle">Enter your registered email and choose a new password</p>
             </div>
 
-            <label>
-              Registered Email
-              <input
-                type="email"
-                value={resetEmail}
-                onChange={(e) => setResetEmail(e.target.value)}
-                placeholder="you@example.com"
-                required
-              />
-            </label>
+            <div className="auth-input-group">
+              <label className="auth-label-3d">
+                <span>Registered Email</span>
+              </label>
+              <div className="auth-input-wrapper">
+                <span className="auth-input-icon">✉️</span>
+                <input
+                  type="email"
+                  className="auth-input-3d"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                />
+              </div>
+            </div>
 
-            <label>
-              New Password (min 6 characters)
-              <input
-                type="password"
-                value={resetPassword}
-                onChange={(e) => setResetPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-              />
-            </label>
+            <div className="auth-input-group">
+              <label className="auth-label-3d">
+                <span>New Password (min 6 characters)</span>
+              </label>
+              <div className="auth-input-wrapper">
+                <span className="auth-input-icon">🔒</span>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="auth-input-3d"
+                  value={resetPassword}
+                  onChange={(e) => setResetPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                />
+                <button
+                  type="button"
+                  className="auth-eye-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? '👁️' : '🙈'}
+                </button>
+              </div>
+            </div>
 
-            {error && <div className="form-error" role="alert">{error}</div>}
+            {error && (
+              <div className="auth-alert-3d auth-alert-error" role="alert">
+                <span>⚠️</span>
+                <span>{error}</span>
+              </div>
+            )}
 
-            <button type="submit" className="primary-btn auth-button auth-button-3d" disabled={loading}>
-              {loading ? 'Updating password...' : 'Update Password'}
+            <button type="submit" className="auth-button-3d-primary" disabled={loading}>
+              {loading ? (
+                <>
+                  <div className="google-btn-spinner" style={{ width: '18px', height: '18px' }} />
+                  <span>Updating Password...</span>
+                </>
+              ) : (
+                <>
+                  <span>Update Password</span>
+                  <span aria-hidden="true">&rarr;</span>
+                </>
+              )}
             </button>
 
-            <p className="auth-link" style={{ marginTop: '1rem', textAlign: 'center' }}>
+            <p className="auth-footer-link">
               <button
                 type="button"
-                className="btn-link"
-                style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontWeight: 600 }}
+                style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontWeight: 700, padding: 0 }}
                 onClick={() => { setIsResetMode(false); setError('') }}
               >
                 &larr; Back to login
@@ -1081,36 +1154,46 @@ function AuthPage({ mode, onAuthComplete }) {
             </p>
           </form>
         ) : (
-          <form className="auth-card auth-card-3d" onSubmit={handleSubmit}>
+          <form
+            className="auth-card-3d-premium"
+            onSubmit={handleSubmit}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+            style={{
+              transform: `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) translateZ(8px)`,
+            }}
+          >
+            <div className="auth-card-sheen" aria-hidden="true" />
+
             <div className="auth-3d-header">
               <div className="auth-3d-badge-orb" aria-hidden="true">
                 🩺
               </div>
-              <span className="eyebrow accent" style={{ letterSpacing: '0.08em', fontWeight: 700 }}>MoveCare AI</span>
-              <h2>{isRegister ? 'Create your account' : 'Welcome back'}</h2>
+              <div className="auth-3d-brand-tag">MoveCare AI Platform</div>
+              <h2 className="auth-3d-title">
+                {isRegister ? 'Create Your Account' : 'Welcome Back'}
+              </h2>
               <p className="auth-3d-subtitle">
-                {isRegister ? 'Personalized Clinical Rehabilitation Platform' : 'Sign in to access your prescribed physical therapy'}
+                {isRegister ? 'Begin personalized clinical recovery & PT guidance' : 'Sign in to access your prescribed physical therapy'}
               </p>
             </div>
 
+            {/* 3D Mode Toggle Switch */}
+            <div className="auth-mode-toggle-3d">
+              <NavLink to="/login" className={`auth-mode-btn-3d ${!isRegister ? 'active' : ''}`}>
+                Sign In
+              </NavLink>
+              <NavLink to="/register" className={`auth-mode-btn-3d ${isRegister ? 'active' : ''}`}>
+                Create Account
+              </NavLink>
+            </div>
+
             {alreadyLoggedInUser && !isRegister && (
-              <div style={{
-                background: '#f0fdf4',
-                border: '1px solid #bbf7d0',
-                borderRadius: '0.65rem',
-                padding: '0.75rem 1rem',
-                marginBottom: '1rem',
-                fontSize: '0.85rem',
-                color: '#166534',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '0.5rem'
-              }}>
+              <div className="auth-active-user-pill">
                 <span>Signed in as <strong>{alreadyLoggedInUser.name}</strong> ({alreadyLoggedInUser.role})</span>
                 <NavLink
                   to={alreadyLoggedInUser.role === 'Therapist' ? '/therapist-dashboard' : '/dashboard'}
-                  style={{ color: '#15803d', fontWeight: 700, textDecoration: 'underline', whiteSpace: 'nowrap' }}
+                  style={{ color: '#15803d', fontWeight: 800, textDecoration: 'underline', whiteSpace: 'nowrap' }}
                 >
                   Dashboard &rarr;
                 </NavLink>
@@ -1118,84 +1201,130 @@ function AuthPage({ mode, onAuthComplete }) {
             )}
 
             {successMsg && (
-              <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '0.65rem', padding: '0.75rem 1rem', marginBottom: '1rem', color: '#15803d', fontSize: '0.88rem' }}>
-                {successMsg}
+              <div className="auth-alert-3d auth-alert-success">
+                <span>✅</span>
+                <span>{successMsg}</span>
               </div>
             )}
 
             {isRegister && (
               <>
-                <label>
-                  Full name
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    placeholder="Enter your name"
-                    required
-                  />
-                </label>
+                <div className="auth-input-group">
+                  <label className="auth-label-3d">
+                    <span>Full Name</span>
+                  </label>
+                  <div className="auth-input-wrapper">
+                    <span className="auth-input-icon">👤</span>
+                    <input
+                      type="text"
+                      name="name"
+                      className="auth-input-3d"
+                      value={formData.name}
+                      onChange={handleChange}
+                      placeholder="e.g. Dr. Jane Smith or John Doe"
+                      required
+                    />
+                  </div>
+                </div>
 
-                <label>
-                  Role / Account Type
-                  <select
-                    name="role"
-                    value={formData.role}
-                    onChange={handleChange}
-                  >
-                    <option value="Patient">Patient</option>
-                    <option value="Therapist">Physical Therapist</option>
-                    <option value="Admin">Administrator</option>
-                  </select>
-                </label>
+                <div className="auth-input-group">
+                  <label className="auth-label-3d">
+                    <span>Clinical Role / Account Type</span>
+                  </label>
+                  <div className="auth-input-wrapper">
+                    <span className="auth-input-icon">🏷️</span>
+                    <select
+                      name="role"
+                      className="auth-input-3d"
+                      value={formData.role}
+                      onChange={handleChange}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <option value="Patient">Patient (Prescribed Therapy)</option>
+                      <option value="Therapist">Physical Therapist (Clinical Provider)</option>
+                      <option value="Admin">Administrator (System Director)</option>
+                    </select>
+                  </div>
+                </div>
               </>
             )}
 
-            <label>
-              Email
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="you@example.com"
-                required
-              />
-            </label>
+            <div className="auth-input-group">
+              <label className="auth-label-3d">
+                <span>Email Address</span>
+              </label>
+              <div className="auth-input-wrapper">
+                <span className="auth-input-icon">✉️</span>
+                <input
+                  type="email"
+                  name="email"
+                  className="auth-input-3d"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="name@example.com"
+                  required
+                />
+              </div>
+            </div>
 
-            <label>
-              Password
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="••••••••"
-                required
-              />
-            </label>
-
-            {!isRegister && (
-              <div style={{ textAlign: 'right', marginTop: '-0.35rem', marginBottom: '0.75rem' }}>
+            <div className="auth-input-group">
+              <div className="auth-label-3d">
+                <span>Password</span>
+                {!isRegister && (
+                  <button
+                    type="button"
+                    style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.82rem', cursor: 'pointer', fontWeight: 700, padding: 0 }}
+                    onClick={() => { setIsResetMode(true); setResetEmail(formData.email); setError('') }}
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
+              <div className="auth-input-wrapper">
+                <span className="auth-input-icon">🔒</span>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  className="auth-input-3d"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="••••••••"
+                  required
+                />
                 <button
                   type="button"
-                  style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.82rem', cursor: 'pointer', fontWeight: 600, padding: 0 }}
-                  onClick={() => { setIsResetMode(true); setResetEmail(formData.email); setError('') }}
+                  className="auth-eye-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  title={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  Forgot or need to update password?
+                  {showPassword ? '👁️' : '🙈'}
                 </button>
+              </div>
+            </div>
+
+            {error && (
+              <div className="auth-alert-3d auth-alert-error" role="alert">
+                <span>⚠️</span>
+                <span>{error}</span>
               </div>
             )}
 
-            {error && <div className="form-error" role="alert">{error}</div>}
-
-            <button type="submit" className="primary-btn auth-button auth-button-3d" disabled={loading}>
-              {loading ? 'Please wait...' : isRegister ? 'Create account' : 'Login'}
+            <button type="submit" className="auth-button-3d-primary" disabled={loading}>
+              {loading ? (
+                <>
+                  <div className="google-btn-spinner" style={{ width: '18px', height: '18px' }} />
+                  <span>Authenticating...</span>
+                </>
+              ) : (
+                <>
+                  <span>{isRegister ? 'Create Account' : 'Sign In to Portal'}</span>
+                  <span aria-hidden="true">&rarr;</span>
+                </>
+              )}
             </button>
 
-            <div className="auth-divider">
-              <span>or</span>
+            <div className="auth-divider-3d">
+              <span>or continue with</span>
             </div>
 
             <GoogleAuthButton
@@ -1204,10 +1333,10 @@ function AuthPage({ mode, onAuthComplete }) {
               disabled={loading}
             />
 
-            <p className="auth-link">
-              {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
+            <p className="auth-footer-link">
+              {isRegister ? 'Already have an account?' : "Don't have an account yet?"}{' '}
               <NavLink to={isRegister ? '/login' : '/register'}>
-                {isRegister ? 'Login here' : 'Register here'}
+                {isRegister ? 'Sign in here' : 'Create an account'}
               </NavLink>
             </p>
           </form>
