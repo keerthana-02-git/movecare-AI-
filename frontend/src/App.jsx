@@ -2496,25 +2496,481 @@ function PatientAppointmentsPage() {
 function TherapistAppointmentsPage() {
   const [appointments, setAppointments] = useState(null)
   const [error, setError] = useState('')
-  const load = async () => { try { setAppointments(await apiRequest('/appointments/therapist')) } catch (loadError) { setError(loadError.message) } }
-  useEffect(() => { load() }, [])
-  const manage = async (appointment, status) => { try { await apiRequest(`/appointments/${appointment._id}/manage`, { method: 'PATCH', body: JSON.stringify({ status }) }); await load() } catch (manageError) { setError(manageError.message) } }
-  if (error && !appointments) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
+  const [notice, setNotice] = useState('')
+  const [reschedulingId, setReschedulingId] = useState('')
+  const [rescheduleData, setRescheduleData] = useState({ date: '', startTime: '10:00', endTime: '10:45' })
+
+  const load = async () => {
+    try {
+      setAppointments(await apiRequest('/appointments/therapist'))
+    } catch (loadError) {
+      setError(loadError.message)
+    }
+  }
+
+  useEffect(() => {
+    load()
+  }, [])
+
+  const manage = async (appointment, status, additionalBody = {}) => {
+    try {
+      setError('')
+      setNotice('')
+      await apiRequest(`/appointments/${appointment._id}/manage`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, ...additionalBody }),
+      })
+      await load()
+      setNotice(`Appointment updated to ${status}.`)
+    } catch (manageError) {
+      setError(manageError.message)
+    }
+  }
+
+  const handleReschedule = async (appointment) => {
+    if (!rescheduleData.date || !rescheduleData.startTime || !rescheduleData.endTime) {
+      setError('Please provide date, start time, and end time for rescheduling.')
+      return
+    }
+    try {
+      setError('')
+      setNotice('')
+      await apiRequest(`/appointments/${appointment._id}/manage`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          date: rescheduleData.date,
+          startTime: rescheduleData.startTime,
+          endTime: rescheduleData.endTime,
+        }),
+      })
+      setReschedulingId('')
+      await load()
+      setNotice('Appointment successfully rescheduled.')
+    } catch (rescheduleError) {
+      setError(rescheduleError.message)
+    }
+  }
+
+  if (error && !appointments) {
+    return (
+      <main className="page-shell">
+        <div className="container dashboard-wrap">
+          <div className="dashboard-error" role="alert">{error}</div>
+        </div>
+      </main>
+    )
+  }
   if (!appointments) return <LoadingDashboard />
-  return <main className="page-shell"><div className="container management-wrap"><div className="management-heading"><span className="eyebrow accent">Therapist workspace</span><h2>Appointment schedule</h2><p>Confirm visits, manage the day, and open the consultation room when it is time.</p></div>{error && <div className="form-error" role="alert">{error}</div>}<section className="management-panel appointment-list-panel"><div className="appointment-list">{appointments.length ? appointments.map((appointment) => <article className="appointment-row" key={appointment._id}><div className="appointment-date"><strong>{formatDate(appointment.appointmentDate)}</strong><span>{appointment.startTime} - {appointment.endTime}</span></div><div className="appointment-main"><strong>{appointment.patient?.user?.name}</strong><span>{appointment.patient?.medicalCondition}</span><small>{appointment.type} · {appointment.consultationMode}</small></div><AppointmentStatus status={appointment.status}/><div className="appointment-actions">{appointment.status === 'Scheduled' && <button className="primary-btn small" type="button" onClick={() => manage(appointment, 'Accepted')}>Accept</button>}{appointment.status === 'Accepted' && <button className="primary-btn small" type="button" onClick={() => manage(appointment, 'InProgress')}>Start</button>}<ConsultationLink appointment={appointment}/>{['Scheduled', 'Accepted'].includes(appointment.status) && <button className="danger-btn" type="button" onClick={() => manage(appointment, 'Cancelled')}>Decline</button>}</div></article>) : <p className="empty-state">No appointments are scheduled.</p>}</div></section></div></main>
+
+  return (
+    <main className="page-shell">
+      <div className="container management-wrap">
+        <div className="management-heading">
+          <span className="eyebrow accent">Therapist workspace</span>
+          <h2>Appointment schedule & consultations</h2>
+          <p>Confirm visits, manage status, reschedule, and open the consultation room when it is time.</p>
+        </div>
+        {error && <div className="form-error" role="alert">{error}</div>}
+        {notice && <div className="success-message" role="status">{notice}</div>}
+        <section className="management-panel appointment-list-panel">
+          <div className="appointment-list">
+            {appointments.length ? (
+              appointments.map((appointment) => (
+                <article className="appointment-row" key={appointment._id}>
+                  <div className="appointment-date">
+                    <strong>{formatDate(appointment.appointmentDate)}</strong>
+                    <span>{appointment.startTime} - {appointment.endTime}</span>
+                  </div>
+                  <div className="appointment-main">
+                    <strong>{appointment.patient?.user?.name}</strong>
+                    <span>{appointment.patient?.medicalCondition || 'No condition recorded'}</span>
+                    <small>{appointment.type} · {appointment.consultationMode} {appointment.notes ? `· "${appointment.notes}"` : ''}</small>
+                  </div>
+                  <AppointmentStatus status={appointment.status} />
+                  <div className="appointment-actions">
+                    {appointment.status === 'Scheduled' && (
+                      <button className="primary-btn small" type="button" onClick={() => manage(appointment, 'Accepted')}>
+                        Accept
+                      </button>
+                    )}
+                    {appointment.status === 'Accepted' && (
+                      <button className="primary-btn small" type="button" onClick={() => manage(appointment, 'InProgress')}>
+                        Start
+                      </button>
+                    )}
+                    <ConsultationLink appointment={appointment} />
+                    {['Scheduled', 'Accepted'].includes(appointment.status) && (
+                      <button
+                        className="secondary-btn small"
+                        type="button"
+                        onClick={() => {
+                          setReschedulingId(reschedulingId === appointment._id ? '' : appointment._id)
+                          setRescheduleData({
+                            date: new Date(appointment.appointmentDate).toISOString().slice(0, 10),
+                            startTime: appointment.startTime,
+                            endTime: appointment.endTime,
+                          })
+                        }}
+                      >
+                        {reschedulingId === appointment._id ? 'Cancel edit' : 'Reschedule'}
+                      </button>
+                    )}
+                    {['Scheduled', 'Accepted'].includes(appointment.status) && (
+                      <button className="danger-btn" type="button" onClick={() => manage(appointment, 'Cancelled', { reasonForCancellation: 'Declined by therapist' })}>
+                        Decline
+                      </button>
+                    )}
+                  </div>
+                  {reschedulingId === appointment._id && (
+                    <div style={{ gridColumn: '1 / -1', padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                        New Date:
+                        <input
+                          type="date"
+                          min={new Date().toISOString().slice(0, 10)}
+                          value={rescheduleData.date}
+                          onChange={(e) => setRescheduleData({ ...rescheduleData, date: e.target.value })}
+                          style={{ marginLeft: '0.35rem', padding: '0.25rem 0.5rem' }}
+                        />
+                      </label>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                        Start Time:
+                        <input
+                          type="time"
+                          value={rescheduleData.startTime}
+                          onChange={(e) => setRescheduleData({ ...rescheduleData, startTime: e.target.value })}
+                          style={{ marginLeft: '0.35rem', padding: '0.25rem 0.5rem' }}
+                        />
+                      </label>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                        End Time:
+                        <input
+                          type="time"
+                          value={rescheduleData.endTime}
+                          onChange={(e) => setRescheduleData({ ...rescheduleData, endTime: e.target.value })}
+                          style={{ marginLeft: '0.35rem', padding: '0.25rem 0.5rem' }}
+                        />
+                      </label>
+                      <button type="button" className="primary-btn small" onClick={() => handleReschedule(appointment)}>
+                        Confirm Reschedule
+                      </button>
+                    </div>
+                  )}
+                </article>
+              ))
+            ) : (
+              <p className="empty-state">No appointments are scheduled.</p>
+            )}
+          </div>
+        </section>
+      </div>
+    </main>
+  )
 }
 
 function ConsultationPage({ user }) {
   const { id } = useParams()
   const [appointment, setAppointment] = useState(null)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [mutating, setMutating] = useState(false)
-  useEffect(() => { apiRequest(`/appointments/${id}/consultation`).then(setAppointment).catch((loadError) => setError(loadError.message)) }, [id])
-  const updateStatus = async (consultationStatus) => { try { setMutating(true); const updated = await apiRequest(`/appointments/${id}/consultation`, { method: 'PATCH', body: JSON.stringify({ consultationStatus }) }); setAppointment((current) => ({ ...current, ...updated })) } catch (statusError) { setError(statusError.message) } finally { setMutating(false) } }
-  if (error) return <main className="page-shell"><div className="container dashboard-wrap"><div className="dashboard-error" role="alert">{error}</div></div></main>
+  const [notes, setNotes] = useState('')
+  const [notesSaving, setNotesSaving] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
+  const [isCameraOff, setIsCameraOff] = useState(false)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+
+  useEffect(() => {
+    apiRequest(`/appointments/${id}/consultation`)
+      .then((data) => {
+        setAppointment(data)
+        setNotes(data.notes || '')
+      })
+      .catch((loadError) => setError(loadError.message))
+  }, [id])
+
+  useEffect(() => {
+    let interval = null
+    if (appointment?.consultationStatus === 'Live') {
+      interval = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1)
+      }, 1000)
+    }
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [appointment?.consultationStatus])
+
+  const formatTimer = (seconds) => {
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0')
+    const secs = (seconds % 60).toString().padStart(2, '0')
+    return `${mins}:${secs}`
+  }
+
+  const updateStatus = async (newConsultationStatus) => {
+    try {
+      setMutating(true)
+      setError('')
+      const updated = await apiRequest(`/appointments/${id}/consultation`, {
+        method: 'PATCH',
+        body: JSON.stringify({ consultationStatus: newConsultationStatus }),
+      })
+      setAppointment(updated)
+      setNotice(`Session status updated to ${newConsultationStatus}.`)
+    } catch (statusError) {
+      setError(statusError.message)
+    } finally {
+      setMutating(false)
+    }
+  }
+
+  const saveNotes = async (event) => {
+    event?.preventDefault()
+    try {
+      setNotesSaving(true)
+      setError('')
+      const updated = await apiRequest(`/appointments/${id}/consultation`, {
+        method: 'PATCH',
+        body: JSON.stringify({ notes }),
+      })
+      setAppointment(updated)
+      setNotice('Clinical notes saved to MongoDB.')
+    } catch (saveError) {
+      setError(saveError.message)
+    } finally {
+      setNotesSaving(false)
+    }
+  }
+
+  if (error && !appointment) {
+    return (
+      <main className="page-shell">
+        <div className="container dashboard-wrap">
+          <div className="dashboard-error" role="alert">{error}</div>
+        </div>
+      </main>
+    )
+  }
   if (!appointment) return <LoadingDashboard />
-  const otherPerson = user.role === 'Therapist' ? appointment.patient?.user?.name : appointment.therapist?.user?.name
-  return <main className="page-shell consultation-page"><div className="container consultation-wrap"><NavLink className="back-link" to={user.role === 'Therapist' ? '/therapist-appointments' : '/appointments'}>Back to appointments</NavLink><div className="consultation-header"><div><span className="eyebrow accent">MoveCare virtual clinic</span><h2>Consultation room</h2><p>{formatDate(appointment.appointmentDate)} · {appointment.startTime} - {appointment.endTime} · with {otherPerson}</p></div><AppointmentStatus status={appointment.consultationStatus}/></div><section className="consultation-stage"><div className="video-placeholder"><div className="video-avatar">{otherPerson?.charAt(0)}</div><strong>{otherPerson}</strong><span>{appointment.consultationStatus === 'Live' ? 'Live consultation' : 'Your secure consultation space'}</span><div className="video-controls"><button type="button" className="secondary-btn small">Mute</button><button type="button" className="secondary-btn small">Camera</button>{user.role === 'Therapist' && appointment.consultationStatus !== 'Ended' && <button type="button" className="primary-btn small" disabled={mutating} onClick={() => updateStatus(appointment.consultationStatus === 'Live' ? 'Ended' : 'Live')}>{appointment.consultationStatus === 'Live' ? 'End consultation' : 'Start consultation'}</button>}</div></div><aside className="consultation-sidebar"><h3>Visit details</h3><dl className="profile-list"><div><dt>Type</dt><dd>{appointment.type}</dd></div><div><dt>Mode</dt><dd>{appointment.consultationMode}</dd></div><div><dt>Status</dt><dd>{appointment.status}</dd></div></dl><div className="consultation-note"><strong>Demo consultation</strong><p>This professional room demonstrates the visit flow. Camera and microphone controls are visual placeholders for a future video provider.</p></div></aside></section></div></main>
+
+  const isTherapist = user.role === 'Therapist'
+  const otherPersonName = isTherapist
+    ? appointment.patient?.user?.name || 'Patient'
+    : appointment.therapist?.user?.name || 'Therapist'
+
+  return (
+    <main className="page-shell consultation-page">
+      <div className="container consultation-wrap">
+        <NavLink className="back-link" to={isTherapist ? '/therapist-appointments' : '/appointments'}>
+          ← Back to appointments
+        </NavLink>
+
+        <div className="consultation-header">
+          <div>
+            <span className="eyebrow accent">MoveCare Virtual Telehealth Clinic</span>
+            <h2>Virtual Consultation Room</h2>
+            <p>
+              {formatDate(appointment.appointmentDate)} · {appointment.startTime} - {appointment.endTime} · {appointment.type}
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {appointment.consultationStatus === 'Live' && (
+              <span className="count-badge" style={{ background: '#e02424', color: '#fff' }}>
+                LIVE {formatTimer(elapsedSeconds)}
+              </span>
+            )}
+            <AppointmentStatus status={appointment.consultationStatus} />
+          </div>
+        </div>
+
+        {error && <div className="form-error" role="alert" style={{ marginBottom: '1rem' }}>{error}</div>}
+        {notice && <div className="success-message" role="status" style={{ marginBottom: '1rem' }}>{notice}</div>}
+
+        <section className="consultation-stage">
+          <div className="video-placeholder" style={{ position: 'relative', overflow: 'hidden' }}>
+            <div
+              style={{
+                position: 'absolute',
+                top: '1rem',
+                left: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.78rem',
+                opacity: 0.85,
+              }}
+            >
+              <span
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: appointment.consultationStatus === 'Live' ? '#10b981' : appointment.consultationStatus === 'Waiting' ? '#f59e0b' : '#6b7280',
+                  display: 'inline-block',
+                }}
+              />
+              <span>{appointment.consultationStatus === 'Live' ? 'Encrypted Stream Active' : appointment.consultationStatus === 'Waiting' ? 'In Waiting Room' : 'Consultation Concluded'}</span>
+            </div>
+
+            <div className="video-avatar">
+              {otherPersonName.charAt(0)}
+            </div>
+            <strong>{otherPersonName}</strong>
+            <span>
+              {appointment.consultationStatus === 'Live'
+                ? `Active Clinical Session · Connected with ${otherPersonName}`
+                : appointment.consultationStatus === 'Waiting'
+                ? isTherapist
+                  ? 'Patient is in the consultation room. Click "Start consultation" to begin.'
+                  : 'Waiting for your therapist to start the live consultation...'
+                : 'This clinical consultation has concluded.'}
+            </span>
+
+            <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.78rem', marginTop: '0.25rem' }}>
+              <span className="count-badge" style={{ background: isMuted ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)', color: '#fff' }}>
+                {isMuted ? 'Mic Muted' : 'Mic On'}
+              </span>
+              <span className="count-badge" style={{ background: isCameraOff ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)', color: '#fff' }}>
+                {isCameraOff ? 'Camera Off' : 'Camera On'}
+              </span>
+            </div>
+
+            <div className="video-controls">
+              <button
+                type="button"
+                className="secondary-btn small"
+                onClick={() => setIsMuted(!isMuted)}
+              >
+                {isMuted ? 'Unmute Mic' : 'Mute Mic'}
+              </button>
+
+              <button
+                type="button"
+                className="secondary-btn small"
+                onClick={() => setIsCameraOff(!isCameraOff)}
+              >
+                {isCameraOff ? 'Turn Camera On' : 'Turn Camera Off'}
+              </button>
+
+              {isTherapist && appointment.consultationStatus === 'Waiting' && (
+                <button
+                  type="button"
+                  className="primary-btn small"
+                  disabled={mutating}
+                  onClick={() => updateStatus('Live')}
+                >
+                  {mutating ? 'Starting...' : 'Start consultation'}
+                </button>
+              )}
+
+              {isTherapist && appointment.consultationStatus === 'Live' && (
+                <button
+                  type="button"
+                  className="danger-btn small"
+                  disabled={mutating}
+                  onClick={() => updateStatus('Ended')}
+                >
+                  {mutating ? 'Ending...' : 'Complete & End Consultation'}
+                </button>
+              )}
+
+              {!isTherapist && appointment.consultationStatus === 'Waiting' && (
+                <button
+                  type="button"
+                  className="primary-btn small"
+                  disabled={mutating}
+                  onClick={() => updateStatus('Waiting')}
+                >
+                  Confirm Ready
+                </button>
+              )}
+            </div>
+          </div>
+
+          <aside className="consultation-sidebar">
+            <h3>Visit & Participant</h3>
+            <dl className="profile-list">
+              <div>
+                <dt>{isTherapist ? 'Patient' : 'Therapist'}</dt>
+                <dd><strong>{otherPersonName}</strong></dd>
+              </div>
+              {isTherapist ? (
+                <>
+                  <div>
+                    <dt>Condition</dt>
+                    <dd>{appointment.patient?.medicalCondition || 'Not recorded'}</dd>
+                  </div>
+                  <div>
+                    <dt>Injury</dt>
+                    <dd>{appointment.patient?.injuryDescription || 'Not recorded'}</dd>
+                  </div>
+                  <div>
+                    <dt>Email</dt>
+                    <dd>{appointment.patient?.user?.email}</dd>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <dt>Specialty</dt>
+                    <dd>{appointment.therapist?.specialization || 'Physiotherapy'}</dd>
+                  </div>
+                  <div>
+                    <dt>Experience</dt>
+                    <dd>{appointment.therapist?.yearsOfExperience || 0} years</dd>
+                  </div>
+                  <div>
+                    <dt>Email</dt>
+                    <dd>{appointment.therapist?.user?.email}</dd>
+                  </div>
+                </>
+              )}
+              <div>
+                <dt>Mode</dt>
+                <dd>{appointment.consultationMode}</dd>
+              </div>
+              <div>
+                <dt>Appt Status</dt>
+                <dd><AppointmentStatus status={appointment.status} /></dd>
+              </div>
+              <div>
+                <dt>Session State</dt>
+                <dd><AppointmentStatus status={appointment.consultationStatus} /></dd>
+              </div>
+            </dl>
+
+            <form onSubmit={saveNotes} style={{ marginTop: '1.25rem' }}>
+              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.35rem' }}>
+                Clinical Consultation Notes
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={isTherapist ? 'Record clinical assessment, range of motion observations, and next steps...' : 'Add questions or symptoms for your therapist...'}
+                rows={4}
+                style={{ width: '100%', borderRadius: '0.5rem', border: '1px solid #d1d5db', padding: '0.5rem', fontSize: '0.82rem' }}
+              />
+              <button
+                type="submit"
+                className="secondary-btn small"
+                disabled={notesSaving}
+                style={{ marginTop: '0.5rem', width: '100%' }}
+              >
+                {notesSaving ? 'Saving...' : 'Save Consultation Notes'}
+              </button>
+            </form>
+
+            <div className="consultation-note" style={{ marginTop: '1.25rem' }}>
+              <strong>MoveCare Telehealth Session</strong>
+              <p>
+                Session status transitions and clinical consultation notes are persisted directly to your MongoDB record.
+              </p>
+            </div>
+          </aside>
+        </section>
+      </div>
+    </main>
+  )
 }
 
 function App() {

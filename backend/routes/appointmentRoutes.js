@@ -23,6 +23,6 @@ router.patch('/:id/cancel', authorize('Patient'), cancelPatientAppointment);
 router.get('/therapist', authorize('Therapist'), listTherapistAppointments);
 router.patch('/:id/manage', authorize('Therapist'), updateTherapistAppointment);
 router.get('/:id/consultation', getConsultation);
-router.patch('/:id/consultation', authorize('Therapist'), updateConsultationStatus);
+router.patch('/:id/consultation', authorize('Therapist', 'Patient'), updateConsultationStatus);
 
 export default router;
