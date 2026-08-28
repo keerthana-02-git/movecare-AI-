@@ -1,6 +1,10 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 
+const DEFAULT_JWT_SECRET = 'movecare_production_jwt_secret_key_2026_super_secure_32_characters_minimum_fallback_x89a7f21b';
+const getJwtSecret = () => process.env.JWT_SECRET || DEFAULT_JWT_SECRET;
+
+
 export const protect = async (req, res, next) => {
   let token;
 
@@ -16,8 +20,9 @@ export const protect = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, getJwtSecret());
     req.user = await User.findById(decoded.id).select('-password');
+
 
     if (!req.user) {
       return res.status(401).json({ message: 'User not found' });

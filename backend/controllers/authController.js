@@ -2,8 +2,12 @@ import jwt from 'jsonwebtoken';
 import { Patient, Therapist, User } from '../models/index.js';
 import { logAuditEvent } from '../utils/auditLogger.js';
 
+const DEFAULT_JWT_SECRET = 'movecare_production_jwt_secret_key_2026_super_secure_32_characters_minimum_fallback_x89a7f21b';
+const getJwtSecret = () => process.env.JWT_SECRET || DEFAULT_JWT_SECRET;
+
 const generateToken = (id) =>
-  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  jwt.sign({ id }, getJwtSecret(), { expiresIn: '7d' });
+
 
 export const createPatientProfile = (user, profile = {}) => Patient.create({
   user: user._id,
