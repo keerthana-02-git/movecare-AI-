@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BrowserRouter,
   Navigate,
@@ -2205,6 +2205,11 @@ function PrescribeTreatmentForm({ options, onAssigned, defaultPatientId = '' }) 
   const todayStr = new Date().toISOString().split('T')[0]
   const nextMonthStr = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
 
+  const [patientMode, setPatientMode] = useState('type') // 'type' | 'select'
+  const [typedPatientName, setTypedPatientName] = useState('')
+  const [typedCondition, setTypedCondition] = useState('')
+  const [typedEmail, setTypedEmail] = useState('')
+  const [showSuggestions, setShowSuggestions] = useState(false)
   const [patientId, setPatientId] = useState(defaultPatientId)
   const [exerciseId, setExerciseId] = useState('')
   const [planName, setPlanName] = useState('')
@@ -2217,17 +2222,68 @@ function PrescribeTreatmentForm({ options, onAssigned, defaultPatientId = '' }) 
   const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
-    if (defaultPatientId) setPatientId(defaultPatientId)
-  }, [defaultPatientId])
+    if (defaultPatientId) {
+      setPatientId(defaultPatientId)
+      const found = options?.patients?.find((p) => p._id === defaultPatientId)
+      if (found) {
+        setTypedPatientName(found.user?.name || '')
+        setTypedCondition(found.medicalCondition || '')
+      }
+    }
+  }, [defaultPatientId, options?.patients])
 
   const selectedPatient = options?.patients?.find((p) => p._id === patientId)
   const selectedExercise = options?.exercises?.find((e) => e._id === exerciseId)
 
-  const handlePatientChange = (id) => {
+  // Filter registered patients based on typed text
+  const matchingSuggestions = useMemo(() => {
+    if (!typedPatientName.trim() || !options?.patients?.length) return []
+    const q = typedPatientName.trim().toLowerCase()
+    return options.patients.filter((p) => {
+      const name = String(p.user?.name || '').toLowerCase()
+      const email = String(p.user?.email || '').toLowerCase()
+      const cond = String(p.medicalCondition || '').toLowerCase()
+      return name.includes(q) || email.includes(q) || cond.includes(q)
+    })
+  }, [typedPatientName, options?.patients])
+
+  const handleTypedNameChange = (val) => {
+    setTypedPatientName(val)
+    setShowSuggestions(true)
+    // Check if exact match with existing patient
+    const exact = options?.patients?.find((p) => (p.user?.name || '').trim().toLowerCase() === val.trim().toLowerCase())
+    if (exact) {
+      setPatientId(exact._id)
+      if (exact.medicalCondition && !typedCondition) setTypedCondition(exact.medicalCondition)
+    } else {
+      setPatientId('')
+    }
+    if (val.trim() && !planName) {
+      const exName = selectedExercise?.name ? `${selectedExercise.name} ` : ''
+      setPlanName(`${val.trim()} ${exName}Recovery Plan`)
+    }
+  }
+
+  const selectSuggestion = (patient) => {
+    setPatientId(patient._id)
+    setTypedPatientName(patient.user?.name || '')
+    setTypedCondition(patient.medicalCondition || '')
+    setShowSuggestions(false)
+    if (!planName) {
+      const exName = selectedExercise?.name ? `${selectedExercise.name} ` : ''
+      setPlanName(`${patient.user?.name || 'Patient'} ${exName}Recovery Plan`)
+    }
+  }
+
+  const handlePatientSelectChange = (id) => {
     setPatientId(id)
     const p = options?.patients?.find((item) => item._id === id)
-    if (p && !planName) {
-      setPlanName(`${p.user?.name || 'Patient'} Rehab Protocol`)
+    if (p) {
+      setTypedPatientName(p.user?.name || '')
+      setTypedCondition(p.medicalCondition || '')
+      if (!planName) {
+        setPlanName(`${p.user?.name || 'Patient'} Rehab Protocol`)
+      }
     }
   }
 
@@ -2235,16 +2291,21 @@ function PrescribeTreatmentForm({ options, onAssigned, defaultPatientId = '' }) 
     setExerciseId(id)
     const ex = options?.exercises?.find((item) => item._id === id)
     if (ex) {
-      const p = options?.patients?.find((item) => item._id === patientId)
-      const pName = p?.user?.name ? `${p.user.name} - ` : ''
+      const activeName = typedPatientName.trim() || selectedPatient?.user?.name || ''
+      const pName = activeName ? `${activeName} - ` : ''
       setPlanName(`${pName}${ex.name} Recovery Plan`)
     }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!patientId) {
-      setErrorMsg('Please select a patient to assign.')
+    const activePatientName = typedPatientName.trim() || selectedPatient?.user?.name
+    if (patientMode === 'type' && !activePatientName) {
+      setErrorMsg('Please type the patient name.')
+      return
+    }
+    if (patientMode === 'select' && !patientId) {
+      setErrorMsg('Please select a patient from the list.')
       return
     }
     if (!exerciseId) {
@@ -2258,7 +2319,10 @@ function PrescribeTreatmentForm({ options, onAssigned, defaultPatientId = '' }) 
       setSuccessMsg('')
 
       const payload = {
-        patientId,
+        patientId: patientId || undefined,
+        patientName: activePatientName,
+        medicalCondition: typedCondition.trim() || undefined,
+        patientEmail: typedEmail.trim() || undefined,
         exerciseId,
         planName: planName.trim() || `${selectedExercise?.name || 'Rehab'} Treatment Plan`,
         startDate,
@@ -2272,13 +2336,17 @@ function PrescribeTreatmentForm({ options, onAssigned, defaultPatientId = '' }) 
         body: JSON.stringify(payload),
       })
 
-      const assignedPatientName = selectedPatient?.user?.name || 'Patient'
+      const assignedPatientDisplay = activePatientName || 'Patient'
       const assignedExName = selectedExercise?.name || 'Exercise'
 
-      setSuccessMsg(`Treatment successfully prescribed! Assigned "${assignedExName}" to ${assignedPatientName}. The plan is now active in MongoDB.`)
+      setSuccessMsg(`Treatment successfully prescribed! Assigned "${assignedExName}" to ${assignedPatientDisplay}. The plan is now active in MongoDB.`)
       setExerciseId('')
       setPlanName('')
       setNotes('')
+      if (patientMode === 'type') {
+        setTypedPatientName('')
+        setTypedCondition('')
+      }
 
       if (onAssigned) await onAssigned()
     } catch (err) {
@@ -2293,10 +2361,10 @@ function PrescribeTreatmentForm({ options, onAssigned, defaultPatientId = '' }) 
       <div className="prescribe-header">
         <div>
           <h3>🩺 Prescribe Treatment & Assign Patient</h3>
-          <p>Select any registered patient, prescribe their tailored therapy exercise, and click Assign. The patient immediately joins your care roster with an active prescription.</p>
+          <p>Type any patient name or choose from your registered list, prescribe tailored exercises, and assign instantly to MongoDB.</p>
         </div>
         <span className="treatment-badge-count">
-          {options?.patients?.length || 0} Patients Available
+          {options?.patients?.length || 0} Registered Patients
         </span>
       </div>
 
@@ -2315,31 +2383,118 @@ function PrescribeTreatmentForm({ options, onAssigned, defaultPatientId = '' }) 
 
       <form onSubmit={handleSubmit}>
         <div className="treatment-form-grid">
-          <div className="treatment-field-group">
-            <label htmlFor="select-patient-input">
-              1. Select Patient *
-              {selectedPatient?.medicalCondition && (
-                <span style={{ color: '#2563eb', fontSize: '0.8rem' }}>({selectedPatient.medicalCondition})</span>
-              )}
-            </label>
-            <select
-              id="select-patient-input"
-              value={patientId}
-              onChange={(e) => handlePatientChange(e.target.value)}
-              required
-            >
-              <option value="">-- Choose Patient ({options?.patients?.length || 0} registered) --</option>
-              {options?.patients?.map((p) => (
-                <option key={p._id} value={p._id}>
-                  {p.user?.name || 'Patient'} ({p.medicalCondition || 'General Rehab'} — {p.user?.email})
-                </option>
-              ))}
-            </select>
-            {selectedPatient && (
-              <div className="selected-patient-banner">
-                <span>👤 <strong>{selectedPatient.user?.name}</strong></span>
-                <span>· Condition: <strong>{selectedPatient.medicalCondition || 'General'}</strong></span>
-                <span>· Status: {selectedPatient.status}</span>
+          {/* Patient Selection / Name Typing Group */}
+          <div className="treatment-field-group patient-input-interactive-group">
+            <div className="patient-mode-header-row">
+              <label htmlFor={patientMode === 'type' ? 'patient-name-typed-input' : 'select-patient-input'}>
+                1. Patient Name *
+              </label>
+              <div className="patient-mode-toggle-pills" role="radiogroup" aria-label="Patient Name Input Mode">
+                <button
+                  type="button"
+                  className={`mode-toggle-btn ${patientMode === 'type' ? 'active' : ''}`}
+                  onClick={() => setPatientMode('type')}
+                >
+                  ✍️ Type Name
+                </button>
+                <button
+                  type="button"
+                  className={`mode-toggle-btn ${patientMode === 'select' ? 'active' : ''}`}
+                  onClick={() => setPatientMode('select')}
+                >
+                  📋 Choose List
+                </button>
+              </div>
+            </div>
+
+            {patientMode === 'type' ? (
+              <div className="patient-typeahead-wrapper">
+                <div className="patient-name-input-row">
+                  <input
+                    id="patient-name-typed-input"
+                    type="text"
+                    className="patient-name-text-input"
+                    value={typedPatientName}
+                    onChange={(e) => handleTypedNameChange(e.target.value)}
+                    onFocus={() => setShowSuggestions(true)}
+                    placeholder="Type patient name (e.g. Ramesh Kumar, Eleanor Vance, Sarah)..."
+                    required
+                  />
+                  {typedPatientName && (
+                    <button
+                      type="button"
+                      className="patient-input-clear-btn"
+                      onClick={() => { setTypedPatientName(''); setPatientId(''); }}
+                      title="Clear"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Optional Condition/Diagnosis Field */}
+                <input
+                  type="text"
+                  className="patient-condition-text-input"
+                  value={typedCondition}
+                  onChange={(e) => setTypedCondition(e.target.value)}
+                  placeholder="Diagnosis / Condition (Optional, e.g. Post-Op Meniscal Rehab, Knee ACL)"
+                  style={{ marginTop: '0.4rem' }}
+                />
+
+                {/* Suggestions Dropdown */}
+                {showSuggestions && matchingSuggestions.length > 0 && (
+                  <div className="patient-suggestions-dropdown">
+                    <div className="suggestions-header">Matching Registered Patients:</div>
+                    {matchingSuggestions.map((p) => (
+                      <div
+                        key={p._id}
+                        className="patient-suggestion-item"
+                        onMouseDown={() => selectSuggestion(p)}
+                      >
+                        <div className="suggestion-name">👤 {p.user?.name || 'Patient'}</div>
+                        <div className="suggestion-meta">
+                          <span>{p.medicalCondition || 'General Rehab'}</span>
+                          <span>· {p.user?.email}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Live Status Pill */}
+                {typedPatientName.trim() && (
+                  <div className={`patient-typed-status-banner ${patientId ? 'matched' : 'custom'}`}>
+                    {patientId ? (
+                      <span>✓ <strong>{typedPatientName}</strong> is matched to registered record</span>
+                    ) : (
+                      <span>✨ <strong>"{typedPatientName}"</strong> will be prescribed & created in MongoDB</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <select
+                  id="select-patient-input"
+                  value={patientId}
+                  onChange={(e) => handlePatientSelectChange(e.target.value)}
+                  required
+                >
+                  <option value="">-- Choose Patient ({options?.patients?.length || 0} registered) --</option>
+                  {options?.patients?.map((p) => (
+                    <option key={p._id} value={p._id}>
+                      {p.user?.name || 'Patient'} ({p.medicalCondition || 'General Rehab'} — {p.user?.email})
+                    </option>
+                  ))}
+                </select>
+                {selectedPatient && (
+                  <div className="selected-patient-banner">
+                    <span>👤 <strong>{selectedPatient.user?.name}</strong></span>
+                    <span>· Condition: <strong>{selectedPatient.medicalCondition || 'General'}</strong></span>
+                    <span>· Status: {selectedPatient.status}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2434,7 +2589,7 @@ function PrescribeTreatmentForm({ options, onAssigned, defaultPatientId = '' }) 
         <button
           type="submit"
           className="primary-btn"
-          disabled={saving || !options?.patients?.length || !options?.exercises?.length}
+          disabled={saving || (patientMode === 'type' ? !typedPatientName.trim() : !patientId) || !exerciseId}
           style={{ width: '100%', padding: '0.9rem', fontSize: '1.05rem', fontWeight: '800' }}
         >
           {saving ? 'Prescribing and Assigning Plan in MongoDB...' : '✓ Confirm & Prescribe Treatment Plan'}
@@ -2444,10 +2599,68 @@ function PrescribeTreatmentForm({ options, onAssigned, defaultPatientId = '' }) 
   )
 }
 
-function TherapistDashboardPage({ user }) {
+function TherapistDashboardPage({ user, onUserUpdate }) {
   const [data, setData] = useState(null)
   const [selectedId, setSelectedId] = useState('')
   const [error, setError] = useState('')
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState(user?.name || '')
+  const [savingName, setSavingName] = useState(false)
+  const [nameSuccess, setNameSuccess] = useState('')
+  const [displayedName, setDisplayedName] = useState('')
+  const [isTypingComplete, setIsTypingComplete] = useState(false)
+
+  const rawName = user?.name || 'Therapist'
+  const firstName = rawName.split(' ')[0] || 'Clinician'
+  const initial = rawName.charAt(0).toUpperCase() || 'T'
+
+  // Typewriter animation effect
+  useEffect(() => {
+    setIsTypingComplete(false)
+    setDisplayedName('')
+    let i = 0
+    const timer = setInterval(() => {
+      if (i < rawName.length) {
+        setDisplayedName(rawName.slice(0, i + 1))
+        i++
+      } else {
+        setIsTypingComplete(true)
+        clearInterval(timer)
+      }
+    }, 45)
+    return () => clearInterval(timer)
+  }, [rawName])
+
+  const handleSaveName = async (e) => {
+    e?.preventDefault()
+    const trimmed = nameInput.trim()
+    if (!trimmed) return
+    setSavingName(true)
+    try {
+      const res = await apiRequest('/auth/profile', {
+        method: 'PUT',
+        body: JSON.stringify({ name: trimmed }),
+      })
+      const updatedUser = {
+        ...(user || {}),
+        ...(res.user || { name: trimmed }),
+      }
+      if (onUserUpdate) onUserUpdate(updatedUser)
+      localStorage.setItem('movecare-user', JSON.stringify(updatedUser))
+      setIsEditingName(false)
+      setNameSuccess(`Therapist name updated to "${trimmed}"!`)
+      setTimeout(() => setNameSuccess(''), 4000)
+    } catch {
+      const updatedUser = { ...(user || {}), name: trimmed }
+      if (onUserUpdate) onUserUpdate(updatedUser)
+      localStorage.setItem('movecare-user', JSON.stringify(updatedUser))
+      setIsEditingName(false)
+      setNameSuccess(`Therapist name updated to "${trimmed}"!`)
+      setTimeout(() => setNameSuccess(''), 4000)
+    } finally {
+      setSavingName(false)
+    }
+  }
 
   const loadDashboard = async () => {
     try {
@@ -2485,11 +2698,79 @@ function TherapistDashboardPage({ user }) {
   const upcoming = Array.isArray(data.appointments) ? data.appointments.filter((item) => new Date(item.appointmentDate) >= today && !['Cancelled', 'NoShow'].includes(item.status)).slice(0, 4) : []
   const history = Array.isArray(data.appointments) ? data.appointments.filter((item) => new Date(item.appointmentDate) < today || ['Cancelled', 'NoShow'].includes(item.status)).slice().reverse().slice(0, 5) : []
   const averageAdherence = data.patients.length ? Math.round(data.patients.reduce((total, item) => total + (item.summary?.exerciseAdherence || 0), 0) / data.patients.length) : 0
-  const firstName = user?.name ? user.name.split(' ')[0] : 'Clinician'
-  const initial = user?.name ? user.name.charAt(0) : 'T'
 
   return <main className="page-shell dashboard-page therapist-dashboard-page"><div className="container management-wrap">
-    <div className="dashboard-hero"><div><span className="eyebrow accent">Therapist workspace</span><h2>Good to see you, {firstName}.</h2><p>Your assigned caseload, schedule, and clinical signals in one place.</p></div><div className="dashboard-avatar" aria-hidden="true">{initial}</div></div>
+    <div className="dashboard-hero therapist-hero-animated">
+      <div className="therapist-hero-text">
+        <div className="therapist-eyebrow-row">
+          <span className="eyebrow accent">Therapist workspace</span>
+          {nameSuccess && <span className="therapist-name-success-pill">{nameSuccess}</span>}
+        </div>
+
+        {isEditingName ? (
+          <form className="therapist-name-edit-form" onSubmit={handleSaveName}>
+            <div className="therapist-name-input-group">
+              <span className="greeting-prefix-label">Good to see you,</span>
+              <input
+                type="text"
+                className="therapist-name-input-field"
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                placeholder="Type therapist name..."
+                autoFocus
+                required
+              />
+            </div>
+            <div className="therapist-name-btn-group">
+              <button
+                type="submit"
+                className="primary-btn small therapist-save-btn"
+                disabled={savingName || !nameInput.trim()}
+              >
+                {savingName ? 'Saving...' : '✓ Save Name'}
+              </button>
+              <button
+                type="button"
+                className="secondary-btn small"
+                onClick={() => setIsEditingName(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="therapist-greeting-heading-row">
+            <h2>
+              Good to see you,{' '}
+              <span
+                className="therapist-typewriter-text"
+                title="Click to type / edit therapist name"
+                onClick={() => {
+                  setNameInput(user?.name || '')
+                  setIsEditingName(true)
+                }}
+              >
+                {displayedName || firstName}
+              </span>
+              <span className={`therapist-typewriter-caret ${isTypingComplete ? 'blinking' : 'typing'}`}>|</span>.
+            </h2>
+            <button
+              type="button"
+              className="therapist-edit-chip-btn"
+              onClick={() => {
+                setNameInput(user?.name || '')
+                setIsEditingName(true)
+              }}
+              title="Type your own name"
+            >
+              ✏️ Type / Edit Name
+            </button>
+          </div>
+        )}
+        <p>Your assigned caseload, schedule, and clinical signals in one place.</p>
+      </div>
+      <div className="dashboard-avatar" aria-hidden="true">{initial}</div>
+    </div>
     {error && <div className="form-error" role="alert">{error}</div>}
     <div className="therapist-stat-grid">
       <ProgressMetric label="Assigned patients" value={data.patients.length} />
@@ -5335,7 +5616,7 @@ function App() {
                   const activeUser = getActiveUser(user)
 
                   if (!activeUser) return <Navigate to="/login" replace />
-                  if (activeUser.role === 'Therapist') return <TherapistDashboardPage user={activeUser} />
+                  if (activeUser.role === 'Therapist') return <TherapistDashboardPage user={activeUser} onUserUpdate={handleAuthComplete} />
                   if (activeUser.role === 'Admin') return <AdminDashboardPage user={activeUser} />
                   return <PatientDashboardPage user={activeUser} />
                 })()
@@ -5348,7 +5629,18 @@ function App() {
                   const activeUser = getActiveUser(user)
                   if (!activeUser) return <Navigate to="/login" replace />
                   if (activeUser.role !== 'Therapist') return <Navigate to="/dashboard" replace />
-                  return <TherapistDashboardPage user={activeUser} />
+                  return <TherapistDashboardPage user={activeUser} onUserUpdate={handleAuthComplete} />
+                })()
+              }
+            />
+            <Route
+              path="/therapist_dashboard"
+              element={
+                (() => {
+                  const activeUser = getActiveUser(user)
+                  if (!activeUser) return <Navigate to="/login" replace />
+                  if (activeUser.role !== 'Therapist') return <Navigate to="/dashboard" replace />
+                  return <TherapistDashboardPage user={activeUser} onUserUpdate={handleAuthComplete} />
                 })()
               }
             />
