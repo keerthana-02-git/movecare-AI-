@@ -76,14 +76,18 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 
 const startServer = async (port = PORT) => {
-  await connectDB();
-  await auditAndFixAllExerciseMedia();
-  if (process.env.NODE_ENV !== 'test') {
-    startAutomationScheduler();
-  }
   return new Promise((resolve) => {
-    const server = app.listen(port, '0.0.0.0', () => {
+    const server = app.listen(port, '0.0.0.0', async () => {
       console.log(`Backend running on http://localhost:${port}`);
+      try {
+        await connectDB();
+        await auditAndFixAllExerciseMedia();
+        if (process.env.NODE_ENV !== 'test') {
+          startAutomationScheduler();
+        }
+      } catch (initErr) {
+        console.error('Non-blocking initialization notice:', initErr.message);
+      }
       resolve(server);
     });
   });
@@ -96,3 +100,4 @@ if (isMainModule) {
 }
 
 export { app, startServer };
+
