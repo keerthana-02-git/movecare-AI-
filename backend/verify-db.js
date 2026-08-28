@@ -3,7 +3,6 @@
  * Tests that Mongoose can connect to MongoDB successfully
  */
 import mongoose from 'mongoose';
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,9 +29,11 @@ const verifyConnection = async () => {
 
     if (!mongoUri) {
       console.log('No MONGODB_URI found. Using MongoDB Memory Server...');
+      const { MongoMemoryServer } = await import('mongodb-memory-server');
       memoryServer = await MongoMemoryServer.create();
       mongoUri = memoryServer.getUri();
     }
+
 
     const conn = await mongoose.connect(mongoUri);
     console.log(`✅ Connected to MongoDB: ${conn.connection.host}\n`);

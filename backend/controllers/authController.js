@@ -485,3 +485,43 @@ export const getMe = async (req, res) => {
   });
 };
 
+export const updateProfile = async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ message: 'Name cannot be empty' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const oldName = user.name;
+    user.name = String(name).trim();
+    await user.save();
+
+    await logAuditEvent({
+      action: 'USER_PROFILE_UPDATED',
+      performedBy: user,
+      performedByRole: user.role,
+      targetEntity: { entityType: 'User', entityId: user._id },
+      details: { previousName: oldName, updatedName: user.name, email: user.email, role: user.role },
+      req,
+    });
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Profile update failed' });
+  }
+};
+
+

@@ -4,6 +4,7 @@ import {
   loginUser,
   logoutUser,
   getMe,
+  updateProfile,
   googleAuth,
   getGoogleAuthUrl,
   googleCallback,
@@ -21,6 +22,7 @@ router.get('/google/callback', googleCallback);
 router.post('/google', googleAuth);
 router.post('/logout', logoutUser);
 router.get('/me', protect, getMe);
+router.put('/profile', protect, updateProfile);
 
 export default router;
 

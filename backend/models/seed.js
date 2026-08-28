@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,10 +39,12 @@ const seedDatabase = async () => {
 
     // Use MongoDB Memory Server if no URI provided
     if (!mongoUri) {
+      const { MongoMemoryServer } = await import('mongodb-memory-server');
       memoryServer = await MongoMemoryServer.create();
       mongoUri = memoryServer.getUri();
       console.log('Using MongoDB Memory Server for seeding...');
     }
+
 
     await mongoose.connect(mongoUri);
     console.log('Connected to MongoDB');

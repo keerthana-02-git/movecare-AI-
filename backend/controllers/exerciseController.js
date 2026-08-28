@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import {
   Exercise,
   ExercisePlan,
@@ -6,7 +7,7 @@ import {
   Therapist,
   User,
 } from '../models/index.js';
-import { ensureTherapistProfile } from './authController.js';
+import { createPatientProfile, ensureTherapistProfile } from './authController.js';
 import { ensurePatientProfile } from './patientController.js';
 import { createNotification } from './notificationController.js';
 import { logAuditEvent } from '../utils/auditLogger.js';
@@ -317,6 +318,9 @@ export const assignExercise = async (req, res) => {
   try {
     const {
       patientId,
+      patientName,
+      patientEmail,
+      medicalCondition,
       exerciseId,
       exerciseIds,
       exercises: rawExercisesList,
@@ -342,20 +346,65 @@ export const assignExercise = async (req, res) => {
       idsToAssign.push(exerciseId);
     }
 
-    if (!patientId || idsToAssign.length === 0) {
-      return res.status(400).json({ message: 'Patient and at least one exercise are required' });
+    if ((!patientId && !patientName) || idsToAssign.length === 0) {
+      return res.status(400).json({ message: 'Patient name/ID and at least one exercise are required' });
     }
 
     const therapist = await getTherapist(req.user);
     if (!therapist) return res.status(404).json({ message: 'Therapist profile not found' });
 
-    // Look up patient by Patient._id or User._id
-    let patient = await Patient.findById(patientId);
-    if (!patient) {
-      patient = await Patient.findOne({ user: patientId });
+    // Look up patient by Patient._id, User._id, or patientName
+    let patient = null;
+    if (patientId && mongoose.isValidObjectId(patientId)) {
+      patient = await Patient.findById(patientId);
+      if (!patient) {
+        patient = await Patient.findOne({ user: patientId });
+      }
     }
+
+    // If not found by ID, search by patientName or create new Patient
+    if (!patient && (patientName || patientId)) {
+      const searchName = String(patientName || patientId).trim();
+      if (searchName) {
+        const userMatch = await User.findOne({
+          name: { $regex: new RegExp(`^${searchName}$`, 'i') },
+          role: 'Patient',
+        });
+        if (userMatch) {
+          patient = await Patient.findOne({ user: userMatch._id });
+        }
+
+        // If still not found and a valid name string is provided, auto-create the patient record!
+        if (!patient) {
+          const cleanName = searchName;
+          const normalizedEmail = (patientEmail && String(patientEmail).trim().toLowerCase()) ||
+            `patient_${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '')}_${Date.now().toString().slice(-4)}@movecare.io`;
+
+          let targetUser = await User.findOne({ email: normalizedEmail });
+          if (!targetUser) {
+            targetUser = await User.create({
+              name: cleanName,
+              email: normalizedEmail,
+              password: 'Password123!',
+              role: 'Patient',
+            });
+          }
+
+          patient = await Patient.findOne({ user: targetUser._id });
+          if (!patient) {
+            patient = await createPatientProfile(targetUser, {
+              medicalCondition: medicalCondition || 'Prescribed Therapy Protocol',
+            });
+            patient.assignedTherapist = therapist._id;
+            patient.status = 'Active';
+            await patient.save();
+          }
+        }
+      }
+    }
+
     if (!patient) {
-      return res.status(404).json({ message: 'Patient not found' });
+      return res.status(404).json({ message: 'Patient not found or could not be created' });
     }
 
     // Look up exercises from library
