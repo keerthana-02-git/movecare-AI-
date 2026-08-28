@@ -30,7 +30,8 @@ import PainJournalCard from './components/journal/PainJournalCard'
 import PainJournalFormModal from './components/journal/PainJournalFormModal'
 import PainJournalPage from './components/journal/PainJournalPage'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'https://movecare-ai-backend.onrender.com/api'
 
 function getActiveUser(reactUser) {
   try {

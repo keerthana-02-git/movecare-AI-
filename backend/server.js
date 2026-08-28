@@ -36,7 +36,7 @@ if (!process.env.JWT_SECRET) {
 
 const configuredOrigins = process.env.CLIENT_ORIGIN
   ? process.env.CLIENT_ORIGIN.split(',')
-  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+  : ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://movecare-ai.vercel.app'];
 const allowedOrigins = configuredOrigins
   .map((origin) => origin.trim())
   .filter(Boolean);
@@ -48,6 +48,7 @@ app.use(
       if (!origin) return callback(null, true);
       if (
         /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+        /^https:\/\/.*\.vercel\.app$/.test(origin) ||
         allowedOrigins.includes(origin)
       ) {
         return callback(null, true);
@@ -59,6 +60,7 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
+
 app.use(express.json({ limit: '100kb' }));
 
 app.get('/api/health', (req, res) => {
