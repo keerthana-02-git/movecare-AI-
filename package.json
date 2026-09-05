@@ -7,6 +7,7 @@
     "backend"
   ],
   "scripts": {
+    "build": "npm run build --prefix frontend",
     "install:frontend": "npm install --prefix frontend",
     "install:backend": "npm install --prefix backend",
     "dev:frontend": "npm run dev --prefix frontend",
