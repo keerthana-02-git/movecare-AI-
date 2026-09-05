@@ -22,8 +22,7 @@ function toInputDate(value) {
   }
 }
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'https://movecare-ai-backend.onrender.com/api'
+import { API_BASE_URL } from '../../config'
 
 export default function ProfileSummary({ profile, user, onProfileUpdated }) {
   const [isEditing, setIsEditing] = useState(false)

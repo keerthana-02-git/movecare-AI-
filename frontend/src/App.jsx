@@ -29,9 +29,7 @@ import MobilityTrendCard from './components/progress/MobilityTrendCard'
 import PainJournalCard from './components/journal/PainJournalCard'
 import PainJournalFormModal from './components/journal/PainJournalFormModal'
 import PainJournalPage from './components/journal/PainJournalPage'
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'https://movecare-ai-backend.onrender.com/api'
+import { API_BASE_URL } from './config'
 
 function getActiveUser(reactUser) {
   try {
@@ -1037,7 +1035,7 @@ function AuthPage({ mode, onAuthComplete }) {
       }
     } catch (submittedError) {
       if (submittedError.name === 'TypeError' && (submittedError.message === 'Failed to fetch' || submittedError.message?.includes('fetch') || submittedError.message?.includes('NetworkError'))) {
-        setError(`Unable to reach backend server at ${API_BASE_URL}. Please ensure the server is running on port 5000.`)
+        setError(`Unable to reach backend server at ${API_BASE_URL}. Please ensure the server is running and accessible.`)
       } else {
         setError(submittedError.message || 'Authentication failed')
       }
