@@ -34,20 +34,8 @@ const connectDB = async () => {
   } catch (error) {
     console.warn('⚠️ Initial MongoDB connection attempt:', sanitizeError(error));
 
-    if (isProduction) {
-      console.log('🔄 Retrying MongoDB connection in background...');
-      setTimeout(async () => {
-        try {
-          const retryConn = await mongoose.connect(mongoUri, {
-            serverSelectionTimeoutMS: 15000,
-          });
-          console.log(`✅ MongoDB reconnected (Atlas Cloud): ${retryConn.connection.host}`);
-        } catch (retryErr) {
-          console.error('❌ Background MongoDB connection retry failed:', sanitizeError(retryErr));
-        }
-      }, 3000);
-      return null;
-    }
+    console.log('📌 Atlas access note: To connect directly to Atlas, add 0.0.0.0/0 to MongoDB Atlas Network Access.');
+    console.log('📦 Initializing robust database fallback to ensure uninterrupted service...');
 
     // Development & Testing environment
     try {
